@@ -1,32 +1,91 @@
-const servicio = require("../services/tipoVehiculoService");
+
+const tipoVehiculoService = require("../services/tipoVehiculoService");
+
 const { crearError } = require("../middleware/errores");
 const { identificador } = require("../validators/validaciones");
 
+
 async function listar(req, res) {
-    const registros = await servicio.listar();
-    res.json(registros);
+    const tiposVehiculo = await tipoVehiculoService.listar();
+
+    return res.status(200).json(tiposVehiculo);
 }
+
 
 async function buscar(req, res) {
-    const registro = await servicio.buscar(identificador(req.params.id));
-    if (!registro) throw crearError(404, "Registro no encontrado");
-    res.json(registro);
+    const idTipoVehiculo = identificador(req.params.id);
+
+    const tipoVehiculo = await tipoVehiculoService.buscar(
+        idTipoVehiculo
+    );
+
+    if (!tipoVehiculo) {
+        throw crearError(
+            404,
+            "El tipo de vehículo solicitado no existe"
+        );
+    }
+
+    return res.status(200).json(tipoVehiculo);
 }
+
 
 async function crear(req, res) {
-    const registro = await servicio.crear(req.body);
-    res.status(201).json({ mensaje: "Registro creado correctamente", registro });
+    const datosTipoVehiculo = req.body;
+
+    const tipoVehiculo = await tipoVehiculoService.crear(
+        datosTipoVehiculo
+    );
+
+    return res.status(201).json({
+        mensaje: "Tipo de vehículo registrado correctamente",
+        registro: tipoVehiculo
+    });
 }
+
 
 async function actualizar(req, res) {
-    const registro = await servicio.actualizar(identificador(req.params.id), req.body);
-    res.json({ mensaje: "Registro actualizado correctamente", registro });
+    const idTipoVehiculo = identificador(req.params.id);
+    const datosTipoVehiculo = req.body;
+
+    const tipoVehiculo = await tipoVehiculoService.actualizar(
+        idTipoVehiculo,
+        datosTipoVehiculo
+    );
+
+    return res.status(200).json({
+        mensaje: "Tipo de vehículo actualizado correctamente",
+        registro: tipoVehiculo
+    });
 }
+
 
 async function eliminar(req, res) {
-    const resultado = await servicio.eliminar(identificador(req.params.id));
-    if (!resultado.registro) throw crearError(404, "Registro no encontrado");
-    res.json({ mensaje: resultado.modo === "BAJA_LOGICA" ? "Registro dado de baja" : "Registro eliminado", ...resultado });
+    const idTipoVehiculo = identificador(req.params.id);
+
+    const resultado = await tipoVehiculoService.eliminar(
+        idTipoVehiculo
+    );
+
+    if (!resultado || !resultado.registro) {
+        throw crearError(
+            404,
+            "El tipo de vehículo solicitado no existe"
+        );
+    }
+
+    return res.status(200).json({
+        mensaje: "Tipo de vehículo eliminado definitivamente",
+        modo: resultado.modo,
+        registro: resultado.registro
+    });
 }
 
-module.exports = { listar, buscar, crear, actualizar, eliminar };
+
+module.exports = {
+    listar,
+    buscar,
+    crear,
+    actualizar,
+    eliminar
+};

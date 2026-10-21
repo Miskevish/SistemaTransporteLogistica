@@ -2,10 +2,13 @@
 let usuarioActual = null;
 let vistaActual = "inicio";
 let registrosActuales = [];
+
 let modalFormulario;
 let modalDetalle;
+
 let registroEditando = null;
 let tipoFormulario = "";
+let idEnvioEntrega = null;
 
 const nombresCampos = {
     id_cliente: "Cliente",
@@ -13,38 +16,54 @@ const nombresCampos = {
     id_vehiculo: "Vehículo",
     id_pedido: "Pedido",
     id_envio: "Envío",
-    id_tipo_vehiculo: "Tipo",
+    id_tipo_vehiculo: "Tipo de vehículo",
     id_usuario: "Usuario",
     razon_social: "Razón social",
+    cuit: "CUIT",
+    dni: "DNI",
     tipo_carga: "Tipo de carga",
     fecha_estimada: "Fecha estimada",
+    fecha_estimada_llegada: "Llegada estimada",
+    fecha_salida: "Fecha de salida",
+    fecha_hora: "Fecha y hora",
     capacidad: "Capacidad (kg)",
     peso: "Peso (kg)",
-    estado_actual: "Estado",
+    estado_actual: "Estado del envío",
     estado: "Estado",
-    fecha_estimada_llegada: "Llegada estimada",
-    fecha_salida: "Salida",
-    fecha_hora: "Fecha y hora",
     persona_recibe: "Persona que recibe",
-    estado_entrega: "Resultado",
+    estado_entrega: "Resultado de entrega",
     activo: "Activo",
-    id_estado_envio: "Movimiento"
+    id_estado_envio: "Movimiento",
+    anio: "Año",
+    patente: "Patente"
 };
 
+
+// --------------------------------------------------
+// FUNCIONES GENERALES
+// --------------------------------------------------
+
 function escapar(valor) {
-    return String(valor ?? "").replace(/[&<>"']/g, caracter => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-    })[caracter]);
+    return String(valor ?? "").replace(
+        /[&<>"']/g,
+        caracter => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        })[caracter]
+    );
 }
+
 
 function tituloCampo(campo) {
     return nombresCampos[campo] ||
-        campo.replaceAll("_", " ").replace(/^./, letra => letra.toUpperCase());
+        campo
+            .replaceAll("_", " ")
+            .replace(/^./, letra => letra.toUpperCase());
 }
+
 
 function textoValor(valor) {
     if (valor === true) return "Sí";
@@ -54,16 +73,17 @@ function textoValor(valor) {
         return "—";
     }
 
-    if (typeof valor === "string" && /^\d{4}-\d\d-\d\dT/.test(valor)) {
+    if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}T/.test(valor)) {
         const fecha = new Date(valor);
 
-        return Number.isNaN(fecha.getTime())
-            ? valor
-            : fecha.toLocaleString("es-AR");
+        if (!Number.isNaN(fecha.getTime())) {
+            return fecha.toLocaleString("es-AR");
+        }
     }
 
     return String(valor);
 }
+
 
 function mostrarEstado(valor) {
     const estados = [
@@ -78,21 +98,27 @@ function mostrarEstado(valor) {
         "INACTIVO"
     ];
 
-    if (estados.includes(valor)) {
-        return `<span class="estado ${escapar(valor)}">
-            ${escapar(valor.replaceAll("_", " "))}
-        </span>`;
+    if (typeof valor === "string" && estados.includes(valor)) {
+        return `
+            <span class="estado ${escapar(valor)}">
+                ${escapar(valor.replaceAll("_", " "))}
+            </span>
+        `;
     }
 
     return escapar(textoValor(valor));
 }
 
-function aviso(mensaje, tipo = "success") {
-    const caja = document.getElementById("alertas");
 
-    caja.innerHTML = `
-        <div class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+function aviso(mensaje, tipo = "success") {
+    const contenedor = document.getElementById("alertas");
+
+    contenedor.innerHTML = `
+        <div
+            class="alert alert-${tipo} alert-dismissible fade show"
+            role="alert">
             ${escapar(mensaje)}
+
             <button
                 type="button"
                 class="btn-close"
@@ -103,25 +129,65 @@ function aviso(mensaje, tipo = "success") {
     `;
 }
 
+
+function mostrarErrorFormulario(mensaje) {
+    document.getElementById("errorFormulario").textContent = mensaje;
+}
+
+
+function limpiarErrorFormulario() {
+    document.getElementById("errorFormulario").textContent = "";
+}
+
+
 function tieneRol(roles) {
+    if (!usuarioActual) {
+        return false;
+    }
+
     return !roles || roles.includes(usuarioActual.rol);
 }
+
 
 function puedeModificar(modulo) {
     return tieneRol(modulo.escritura || modulo.roles);
 }
 
+
 function establecerTitulo(titulo, subtitulo = "Gestión de operaciones") {
     document.getElementById("tituloVista").textContent = titulo;
     document.getElementById("subtituloVista").textContent = subtitulo;
+
     document.getElementById("accionesVista").innerHTML = "";
     document.getElementById("alertas").innerHTML = "";
 }
 
+
 function mostrarCargando() {
-    document.getElementById("contenidoVista").innerHTML =
-        '<div class="tarjeta text-secondary">Cargando información...</div>';
+    document.getElementById("contenidoVista").innerHTML = `
+        <div class="tarjeta text-secondary" role="status">
+            Cargando información...
+        </div>
+    `;
 }
+
+
+function botonAccion(accion, id, texto, clase = "outline-secondary") {
+    return `
+        <button
+            type="button"
+            class="btn btn-sm btn-${clase}"
+            data-accion="${escapar(accion)}"
+            data-id="${escapar(id)}">
+            ${escapar(texto)}
+        </button>
+    `;
+}
+
+
+// --------------------------------------------------
+// INICIALIZACIÓN Y SESIÓN
+// --------------------------------------------------
 
 function iniciarAplicacion() {
     modalFormulario = new bootstrap.Modal(
@@ -132,9 +198,23 @@ function iniciarAplicacion() {
         document.getElementById("modalDetalle")
     );
 
+    const camposModal = document.getElementById("camposModal");
+
+    if (!document.getElementById("errorFormulario")) {
+        camposModal.insertAdjacentHTML(
+            "afterend",
+            '<div id="errorFormulario" class="text-danger small mt-2" role="alert"></div>'
+        );
+    }
+
     document.getElementById("formIngreso").addEventListener(
         "submit",
         ingresar
+    );
+
+    document.getElementById("formRegistro").addEventListener(
+        "submit",
+        guardarFormulario
     );
 
     document.getElementById("botonSalir").addEventListener(
@@ -142,13 +222,11 @@ function iniciarAplicacion() {
         salir
     );
 
-    document.getElementById("botonMenu").addEventListener("click", () => {
-        document.getElementById("menuLateral").classList.toggle("abierto");
-    });
-
-    document.getElementById("formRegistro").addEventListener(
-        "submit",
-        guardarFormulario
+    document.getElementById("botonMenu").addEventListener(
+        "click",
+        () => {
+            document.getElementById("menuLateral").classList.toggle("abierto");
+        }
     );
 
     document.getElementById("contenidoVista").addEventListener(
@@ -161,6 +239,18 @@ function iniciarAplicacion() {
         eventoAcciones
     );
 
+    document.getElementById("modalFormulario").addEventListener(
+        "hidden.bs.modal",
+        () => {
+            registroEditando = null;
+            tipoFormulario = "";
+            idEnvioEntrega = null;
+
+            document.getElementById("formRegistro").reset();
+            limpiarErrorFormulario();
+        }
+    );
+
     const token = sessionStorage.getItem("token");
 
     if (token) {
@@ -170,33 +260,40 @@ function iniciarAplicacion() {
     }
 }
 
+
 async function ingresar(evento) {
     evento.preventDefault();
 
     const boton = document.getElementById("botonIngreso");
-    boton.disabled = true;
+    const errorIngreso = document.getElementById("errorIngreso");
 
-    document.getElementById("errorIngreso").textContent = "";
+    boton.disabled = true;
+    errorIngreso.textContent = "";
 
     try {
-        const resultado = await solicitarAPI("/auth/login", "POST", {
-            usuario: document.getElementById("usuarioIngreso").value.trim(),
-            clave: document.getElementById("claveIngreso").value
-        });
+        const respuesta = await solicitarAPI(
+            "/auth/login",
+            "POST",
+            {
+                usuario: document.getElementById("usuarioIngreso").value.trim(),
+                clave: document.getElementById("claveIngreso").value
+            }
+        );
 
-        sessionStorage.setItem("token", resultado.token);
-
-        abrirSesion(resultado.usuario);
+        sessionStorage.setItem("token", respuesta.token);
 
         document.getElementById("formIngreso").reset();
 
+        abrirSesion(respuesta.usuario);
+
     } catch (error) {
-        document.getElementById("errorIngreso").textContent = error.message;
+        errorIngreso.textContent = error.message;
 
     } finally {
         boton.disabled = false;
     }
 }
+
 
 function abrirSesion(usuario) {
     usuarioActual = usuario;
@@ -211,13 +308,22 @@ function abrirSesion(usuario) {
     cambiarVista("inicio");
 }
 
+
 function salir() {
     sessionStorage.removeItem("token");
+    sessionStorage.removeItem("usuario");
+
     usuarioActual = null;
+    registrosActuales = [];
 
     document.getElementById("aplicacion").classList.add("d-none");
     document.getElementById("pantallaIngreso").classList.remove("d-none");
 }
+
+
+// --------------------------------------------------
+// NAVEGACIÓN
+// --------------------------------------------------
 
 function crearMenu() {
     const opciones = [
@@ -232,6 +338,7 @@ function crearMenu() {
     ];
 
     const navegacion = document.getElementById("navegacion");
+
     navegacion.innerHTML = "";
 
     for (const [clave, nombre] of opciones) {
@@ -241,6 +348,7 @@ function crearMenu() {
 
         const boton = document.createElement("button");
 
+        boton.type = "button";
         boton.className = "enlace-menu";
         boton.textContent = nombre;
         boton.dataset.vista = clave;
@@ -250,6 +358,7 @@ function crearMenu() {
         navegacion.appendChild(boton);
     }
 }
+
 
 async function cambiarVista(clave) {
     if (MODULOS[clave] && !tieneRol(MODULOS[clave].roles)) {
@@ -268,21 +377,50 @@ async function cambiarVista(clave) {
     });
 
     if (clave === "inicio") {
-        return cargarInicio();
+        await cargarInicio();
+        return;
     }
 
     if (clave === "envios") {
-        return cargarEnvios();
+        await cargarEnvios();
+        return;
     }
 
-    return cargarModulo(clave);
+    if (MODULOS[clave]) {
+        await cargarModulo(clave);
+    }
 }
+
+
+// --------------------------------------------------
+// PANEL PRINCIPAL
+// --------------------------------------------------
+
+function tarjetaEstadistica(titulo, cantidad) {
+    return `
+        <div class="col-sm-6 col-xl-4">
+            <div class="tarjeta h-100">
+                <p class="text-secondary mb-2">
+                    ${escapar(titulo)}
+                </p>
+
+                <div class="numero-panel">
+                    ${escapar(cantidad)}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 
 async function cargarInicio() {
     establecerTitulo("Panel principal", "Resumen de la empresa");
     mostrarCargando();
 
     try {
+        let tarjetas = [];
+        let descripcion = "";
+
         if (usuarioActual.rol === "CONDUCTOR") {
             const envios = await solicitarAPI("/envios");
 
@@ -290,53 +428,32 @@ async function cargarInicio() {
                 envio => envio.estado_actual === "EN_TRANSITO"
             ).length;
 
-            document.getElementById("contenidoVista").innerHTML = `
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <div class="tarjeta">
-                            <p class="text-secondary mb-2">Mis envíos asignados</p>
-                            <div class="numero-panel">${envios.length}</div>
-                        </div>
-                    </div>
+            tarjetas = [
+                ["Mis envíos asignados", envios.length],
+                ["En tránsito", enTransito]
+            ];
 
-                    <div class="col-md-4">
-                        <div class="tarjeta">
-                            <p class="text-secondary mb-2">En tránsito</p>
-                            <div class="numero-panel">${enTransito}</div>
-                        </div>
-                    </div>
-                </div>
+            descripcion =
+                "Consultá tus viajes asignados y registrá las entregas desde Envíos y seguimiento.";
 
-                <div class="tarjeta mt-4">
-                    <h2 class="h5">Mis viajes</h2>
-                    <p class="mb-0 text-secondary">
-                        Entrá a Envíos y seguimiento para consultar
-                        tus viajes y registrar entregas.
-                    </p>
-                </div>
-            `;
+        } else {
+            const resumen = await solicitarAPI("/reportes/resumen");
 
-            return;
+            tarjetas = [
+                ["Clientes activos", resumen.clientes_activos],
+                ["Pedidos registrados", resumen.pedidos],
+                ["Vehículos disponibles", resumen.vehiculos_disponibles],
+                ["Envíos en tránsito", resumen.envios_en_transito],
+                ["Envíos entregados", resumen.envios_entregados]
+            ];
+
+            descripcion =
+                "Registrá clientes y recursos, creá pedidos y asigná vehículos y conductores para realizar los envíos.";
         }
 
-        const resumen = await solicitarAPI("/reportes/resumen");
-
-        const tarjetas = [
-            ["Clientes activos", resumen.clientes_activos],
-            ["Pedidos", resumen.pedidos],
-            ["Vehículos disponibles", resumen.vehiculos_disponibles],
-            ["Envíos en tránsito", resumen.envios_en_transito],
-            ["Envíos entregados", resumen.envios_entregados]
-        ];
-
-        const contenidoTarjetas = tarjetas.map(([nombre, cantidad]) => `
-            <div class="col-sm-6 col-xl-4">
-                <div class="tarjeta h-100">
-                    <p class="text-secondary mb-2">${escapar(nombre)}</p>
-                    <div class="numero-panel">${escapar(cantidad)}</div>
-                </div>
-            </div>
-        `).join("");
+        const contenidoTarjetas = tarjetas
+            .map(([titulo, cantidad]) => tarjetaEstadistica(titulo, cantidad))
+            .join("");
 
         document.getElementById("contenidoVista").innerHTML = `
             <div class="row g-3">
@@ -344,11 +461,10 @@ async function cargarInicio() {
             </div>
 
             <div class="tarjeta mt-4">
-                <h2 class="h5">Cómo utilizar el sistema</h2>
-                <p class="mb-0 text-secondary">
-                    Registrá clientes y recursos, creá pedidos y
-                    convertí cada pedido en un envío.
-                    Después podrás seguir sus estados y registrar la entrega.
+                <h2 class="h5 mb-3">Gestión de transporte</h2>
+
+                <p class="text-secondary mb-0">
+                    ${escapar(descripcion)}
                 </p>
             </div>
         `;
@@ -359,13 +475,22 @@ async function cargarInicio() {
     }
 }
 
-function construirTabla(registros, columnas, idCampo, acciones) {
-    if (!registros.length) {
-        return '<div class="vacio">Todavía no hay registros para mostrar.</div>';
+
+// --------------------------------------------------
+// TABLAS
+// --------------------------------------------------
+
+function construirTabla(registros, columnas, campoIdentificador, acciones) {
+    if (registros.length === 0) {
+        return `
+            <div class="vacio">
+                Todavía no hay registros para mostrar.
+            </div>
+        `;
     }
 
     const encabezados = columnas.map(campo => `
-        <th>${escapar(tituloCampo(campo))}</th>
+        <th scope="col">${escapar(tituloCampo(campo))}</th>
     `).join("");
 
     const filas = registros.map(registro => {
@@ -379,8 +504,10 @@ function construirTabla(registros, columnas, idCampo, acciones) {
 
         return `
             <tr>
-                <td>${escapar(registro[idCampo])}</td>
+                <td>${escapar(registro[campoIdentificador])}</td>
+
                 ${celdas}
+
                 <td>
                     <div class="acciones-tabla">
                         ${acciones(registro)}
@@ -392,12 +519,12 @@ function construirTabla(registros, columnas, idCampo, acciones) {
 
     return `
         <div class="tabla-contenedor">
-            <table class="table table-hover">
+            <table class="table table-hover align-middle">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th scope="col">ID</th>
                         ${encabezados}
-                        <th>Acciones</th>
+                        <th scope="col">Acciones</th>
                     </tr>
                 </thead>
 
@@ -409,25 +536,82 @@ function construirTabla(registros, columnas, idCampo, acciones) {
     `;
 }
 
-function botonAccion(accion, id, texto, clase = "outline-secondary") {
-    return `
-        <button
-            class="btn btn-sm btn-${clase}"
-            data-accion="${escapar(accion)}"
-            data-id="${escapar(id)}">
-            ${escapar(texto)}
-        </button>
-    `;
+
+// --------------------------------------------------
+// FILTROS DE MÓDULOS
+// --------------------------------------------------
+
+function obtenerEstadosFiltro(clave) {
+    if (clave === "conductores") {
+        return [
+            ["ACTIVO", "Activos"],
+            ["INACTIVO", "Inactivos"]
+        ];
+    }
+
+    if (clave === "usuarios") {
+        return [
+            ["true", "Activos"],
+            ["false", "Inactivos"]
+        ];
+    }
+
+    if (clave === "vehiculos") {
+        return [
+            ["DISPONIBLE", "Disponibles"],
+            ["EN_VIAJE", "En viaje"],
+            ["MANTENIMIENTO", "En mantenimiento"]
+        ];
+    }
+
+    return [];
 }
+
+
+function filtrarRegistros(clave, registros, busqueda, estado) {
+    const consulta = busqueda.trim().toLowerCase();
+
+    return registros.filter(registro => {
+        const coincideTexto = Object.values(registro).some(valor =>
+            String(valor ?? "").toLowerCase().includes(consulta)
+        );
+
+        if (!coincideTexto) {
+            return false;
+        }
+
+        if (!estado) {
+            return true;
+        }
+
+        if (clave === "usuarios") {
+            return String(registro.activo) === estado;
+        }
+
+        return registro.estado === estado;
+    });
+}
+
+
+// --------------------------------------------------
+// MÓDULOS GENERALES
+// --------------------------------------------------
 
 async function cargarModulo(clave) {
     const modulo = MODULOS[clave];
+
+    if (!modulo) {
+        return;
+    }
 
     establecerTitulo(modulo.titulo);
 
     if (puedeModificar(modulo)) {
         document.getElementById("accionesVista").innerHTML = `
-            <button class="btn btn-primary" data-accion="nuevo">
+            <button
+                type="button"
+                class="btn btn-primary"
+                data-accion="nuevo">
                 + Nuevo registro
             </button>
         `;
@@ -443,68 +627,155 @@ async function cargarModulo(clave) {
 
             let botones = botonAccion("detalle", id, "Ver");
 
-            if (puedeModificar(modulo)) {
+            if (!puedeModificar(modulo)) {
+                return botones;
+            }
+
+            const esConductorInactivo =
+                clave === "conductores" &&
+                registro.estado === "INACTIVO";
+
+            const esUsuarioInactivo =
+                clave === "usuarios" &&
+                registro.activo === false;
+
+            const esClienteInactivo =
+                clave === "clientes" &&
+                registro.activo === false;
+
+            const vehiculoEnViaje =
+                clave === "vehiculos" &&
+                registro.estado === "EN_VIAJE";
+
+            if (!vehiculoEnViaje && !esClienteInactivo) {
                 botones += botonAccion("editar", id, "Editar");
+            }
+
+            if (
+                !esConductorInactivo &&
+                !esUsuarioInactivo &&
+                !esClienteInactivo &&
+                !vehiculoEnViaje
+            ) {
+                let etiqueta = "Eliminar";
+
+                if (clave === "usuarios") {
+                    etiqueta = "Desactivar";
+                }
+
+                if (clave === "conductores" || clave === "clientes") {
+                    etiqueta = "Eliminar / Baja";
+                }
+
+                if (clave === "vehiculos") {
+                    etiqueta = "Retirar";
+                }
 
                 botones += botonAccion(
                     "eliminar",
                     id,
-                    clave === "usuarios" ? "Desactivar" : "Eliminar",
+                    etiqueta,
                     "outline-danger"
+                );
+            }
+
+            if (esConductorInactivo || esUsuarioInactivo) {
+                botones += botonAccion(
+                    "reactivar",
+                    id,
+                    "Reactivar",
+                    "outline-success"
                 );
             }
 
             return botones;
         };
 
-        document.getElementById("contenidoVista").innerHTML = `
-            <div class="tarjeta mb-3">
-                <label for="busqueda" class="form-label">
-                    Buscar en ${escapar(modulo.titulo.toLowerCase())}
+        const estados = obtenerEstadosFiltro(clave);
+
+        const opcionesEstado = estados.map(([valor, etiqueta]) => `
+            <option value="${escapar(valor)}">
+                ${escapar(etiqueta)}
+            </option>
+        `).join("");
+
+        const filtroEstado = estados.length ? `
+            <div class="col-md-4">
+                <label for="filtroModulo" class="form-label">
+                    Filtrar por estado
                 </label>
 
-                <input
-                    id="busqueda"
-                    class="form-control"
-                    placeholder="Escribí para filtrar la tabla...">
+                <select id="filtroModulo" class="form-select">
+                    <option value="">Todos</option>
+                    ${opcionesEstado}
+                </select>
+            </div>
+        ` : "";
+
+        document.getElementById("contenidoVista").innerHTML = `
+            <div class="tarjeta mb-3">
+                <div class="row g-3">
+                    <div class="${estados.length ? "col-md-8" : "col-12"}">
+                        <label for="busqueda" class="form-label">
+                            Buscar en ${escapar(modulo.titulo.toLowerCase())}
+                        </label>
+
+                        <input
+                            id="busqueda"
+                            type="search"
+                            class="form-control"
+                            placeholder="Escribí para buscar...">
+                    </div>
+
+                    ${filtroEstado}
+                </div>
             </div>
 
-            <div id="tablaModulo">
-                ${construirTabla(
-                    registrosActuales,
-                    modulo.columnas,
-                    modulo.identificador,
-                    acciones
-                )}
-            </div>
+            <div id="tablaModulo"></div>
         `;
 
-        document.getElementById("busqueda").addEventListener(
-            "input",
-            evento => {
-                const consulta = evento.target.value.toLowerCase();
+        const busqueda = document.getElementById("busqueda");
+        const filtro = document.getElementById("filtroModulo");
+        const tabla = document.getElementById("tablaModulo");
 
-                const filtrados = registrosActuales.filter(registro =>
-                    Object.values(registro).some(valor =>
-                        String(valor ?? "").toLowerCase().includes(consulta)
-                    )
-                );
+        if (filtro && (clave === "conductores" || clave === "usuarios")) {
+            filtro.value = clave === "usuarios" ? "true" : "ACTIVO";
+        }
 
-                document.getElementById("tablaModulo").innerHTML =
-                    construirTabla(
-                        filtrados,
-                        modulo.columnas,
-                        modulo.identificador,
-                        acciones
-                    );
-            }
-        );
+        function actualizarTabla() {
+            const filtrados = filtrarRegistros(
+                clave,
+                registrosActuales,
+                busqueda.value,
+                filtro ? filtro.value : ""
+            );
+
+            tabla.innerHTML = construirTabla(
+                filtrados,
+                modulo.columnas,
+                modulo.identificador,
+                acciones
+            );
+        }
+
+        busqueda.addEventListener("input", actualizarTabla);
+
+        if (filtro) {
+            filtro.addEventListener("change", actualizarTabla);
+        }
+
+        actualizarTabla();
 
     } catch (error) {
         document.getElementById("contenidoVista").innerHTML = "";
         aviso(error.message, "danger");
     }
 }
+
+
+// --------------------------------------------------
+// CAMPOS DINÁMICOS DE FORMULARIOS
+// --------------------------------------------------
 
 async function crearCampos(campos, registro = null) {
     const fragmentos = [];
@@ -517,38 +788,63 @@ async function crearCampos(campos, registro = null) {
         }
 
         const id = `campo_${campo.nombre}`;
-        const etiqueta = `${escapar(campo.etiqueta)}${campo.obligatorio ? " *" : ""}`;
+        const etiqueta = escapar(campo.etiqueta);
         const requerido = campo.obligatorio ? "required" : "";
 
-        let elemento;
+        let elemento = "";
 
         if (campo.tipo === "relacion") {
             const moduloRelacionado = MODULOS[campo.origen];
-            let opciones = [];
 
-            try {
-                opciones = await solicitarAPI(moduloRelacionado.ruta);
+            let opciones = await solicitarAPI(moduloRelacionado.ruta);
 
-            } catch (error) {
-                throw new Error(
-                    `No se pudo cargar ${moduloRelacionado.titulo}: ${error.message}`
+            // Solo permitir recursos operativamente utilizables
+            // en los formularios de nuevas asignaciones.
+            if (!registro && tipoFormulario === "envioNuevo") {
+                if (campo.origen === "conductores") {
+                    opciones = opciones.filter(
+                        opcion => opcion.estado === "ACTIVO"
+                    );
+                }
+
+                if (campo.origen === "vehiculos") {
+                    opciones = opciones.filter(
+                        opcion => opcion.estado === "DISPONIBLE"
+                    );
+                }
+            }
+
+            // Al crear un pedido, solo utilizar clientes activos.
+            if (campo.origen === "clientes") {
+                opciones = opciones.filter(
+                    opcion => opcion.activo === true
+                );
+            }
+
+            // Para usuarios conductores, preferir conductores activos.
+            if (
+                tipoFormulario === "usuarios" &&
+                campo.origen === "conductores"
+            ) {
+                opciones = opciones.filter(
+                    opcion => opcion.estado === "ACTIVO" ||
+                    String(opcion.id_conductor) === String(valor)
                 );
             }
 
             const opcionesHTML = opciones.map(opcion => {
-                const identificador = opcion[moduloRelacionado.identificador];
+                const idOpcion = opcion[moduloRelacionado.identificador];
 
                 const descripcion = campo.origen === "conductores"
                     ? `${opcion.nombre} ${opcion.apellido}`
                     : opcion[campo.mostrar];
 
-                const seleccionado =
-                    String(valor ?? "") === String(identificador)
-                        ? "selected"
-                        : "";
+                const seleccionado = String(valor ?? "") === String(idOpcion)
+                    ? "selected"
+                    : "";
 
                 return `
-                    <option value="${escapar(identificador)}" ${seleccionado}>
+                    <option value="${escapar(idOpcion)}" ${seleccionado}>
                         ${escapar(descripcion)}
                     </option>
                 `;
@@ -556,9 +852,9 @@ async function crearCampos(campos, registro = null) {
 
             elemento = `
                 <select
-                    class="form-select"
                     id="${id}"
                     name="${campo.nombre}"
+                    class="form-select"
                     ${requerido}>
                     <option value="">Seleccionar...</option>
                     ${opcionesHTML}
@@ -567,10 +863,9 @@ async function crearCampos(campos, registro = null) {
 
         } else if (campo.tipo === "opciones") {
             const opcionesHTML = campo.opciones.map(opcion => {
-                const seleccionado =
-                    opcion === (valor || campo.opciones[0])
-                        ? "selected"
-                        : "";
+                const seleccionado = opcion === (valor || campo.opciones[0])
+                    ? "selected"
+                    : "";
 
                 return `
                     <option value="${escapar(opcion)}" ${seleccionado}>
@@ -581,9 +876,9 @@ async function crearCampos(campos, registro = null) {
 
             elemento = `
                 <select
-                    class="form-select"
                     id="${id}"
                     name="${campo.nombre}"
+                    class="form-select"
                     ${requerido}>
                     ${opcionesHTML}
                 </select>
@@ -592,12 +887,13 @@ async function crearCampos(campos, registro = null) {
         } else if (campo.tipo === "booleano") {
             elemento = `
                 <select
-                    class="form-select"
                     id="${id}"
-                    name="${campo.nombre}">
+                    name="${campo.nombre}"
+                    class="form-select">
                     <option value="true" ${valor !== false ? "selected" : ""}>
                         Sí
                     </option>
+
                     <option value="false" ${valor === false ? "selected" : ""}>
                         No
                     </option>
@@ -607,11 +903,12 @@ async function crearCampos(campos, registro = null) {
         } else if (campo.tipo === "texto-largo") {
             elemento = `
                 <textarea
-                    class="form-control"
                     id="${id}"
                     name="${campo.nombre}"
+                    class="form-control"
                     rows="3"
-                    maxlength="${campo.maximo || 3000}">${escapar(valor)}</textarea>
+                    maxlength="${campo.maximo || 3000}"
+                    ${requerido}>${escapar(valor)}</textarea>
             `;
 
         } else {
@@ -626,7 +923,7 @@ async function crearCampos(campos, registro = null) {
             const tipo = tipos[campo.tipo] || "text";
 
             if (campo.tipo === "fecha" && valor) {
-                valor = String(valor).substring(0, 10);
+                valor = String(valor).slice(0, 10);
             }
 
             if (campo.tipo === "password") {
@@ -647,17 +944,16 @@ async function crearCampos(campos, registro = null) {
                 ? `maxlength="${campo.maximo}"`
                 : "";
 
-            const minimoCaracteres = campo.minimoCaracteres &&
-                (!registro || campo.tipo !== "password")
-                    ? `minlength="${campo.minimoCaracteres}"`
-                    : "";
+            const minimoCaracteres = campo.minimoCaracteres
+                ? `minlength="${campo.minimoCaracteres}"`
+                : "";
 
             elemento = `
                 <input
-                    class="form-control"
                     id="${id}"
                     name="${campo.nombre}"
                     type="${tipo}"
+                    class="form-control"
                     value="${escapar(valor)}"
                     ${requerido}
                     ${paso}
@@ -670,8 +966,9 @@ async function crearCampos(campos, registro = null) {
         fragmentos.push(`
             <div class="col-md-${campo.tipo === "texto-largo" ? 12 : 6}">
                 <label class="form-label" for="${id}">
-                    ${etiqueta}
+                    ${etiqueta}${campo.obligatorio ? " *" : ""}
                 </label>
+
                 ${elemento}
             </div>
         `);
@@ -680,17 +977,26 @@ async function crearCampos(campos, registro = null) {
     return fragmentos.join("");
 }
 
-async function abrirFormulario(modulo, registro = null) {
-    document.getElementById("formRegistro").onsubmit = null;
 
+// --------------------------------------------------
+// APERTURA DE FORMULARIOS
+// --------------------------------------------------
+
+async function abrirFormulario(modulo, registro = null) {
     tipoFormulario = vistaActual;
     registroEditando = registro;
+    idEnvioEntrega = null;
+
+    limpiarErrorFormulario();
 
     document.getElementById("tituloModal").textContent =
         `${registro ? "Editar" : "Crear"} ${modulo.titulo.toLowerCase()}`;
 
-    document.getElementById("camposModal").innerHTML =
-        '<div class="text-secondary">Cargando campos...</div>';
+    document.getElementById("camposModal").innerHTML = `
+        <div class="text-secondary">
+            Cargando campos...
+        </div>
+    `;
 
     modalFormulario.show();
 
@@ -714,11 +1020,127 @@ async function abrirFormulario(modulo, registro = null) {
     }
 }
 
+
+function camposEnvioNuevo() {
+    return [
+        {
+            nombre: "id_pedido",
+            etiqueta: "Pedido",
+            tipo: "relacion",
+            origen: "pedidos",
+            mostrar: "id_pedido",
+            obligatorio: true
+        },
+        {
+            nombre: "id_vehiculo",
+            etiqueta: "Vehículo",
+            tipo: "relacion",
+            origen: "vehiculos",
+            mostrar: "patente",
+            obligatorio: true
+        },
+        {
+            nombre: "id_conductor",
+            etiqueta: "Conductor",
+            tipo: "relacion",
+            origen: "conductores",
+            mostrar: "nombre",
+            obligatorio: true
+        },
+        {
+            nombre: "fecha_estimada_llegada",
+            etiqueta: "Fecha estimada de llegada",
+            tipo: "fecha",
+            obligatorio: true
+        }
+    ];
+}
+
+
+function camposEntrega() {
+    return [
+        {
+            nombre: "persona_recibe",
+            etiqueta: "Nombre de quien recibe",
+            obligatorio: true,
+            maximo: 150
+        },
+        {
+            nombre: "estado_entrega",
+            etiqueta: "Resultado",
+            tipo: "opciones",
+            opciones: [
+                "CONFORME",
+                "CON_OBSERVACIONES"
+            ],
+            obligatorio: true
+        },
+        {
+            nombre: "observaciones",
+            etiqueta: "Observaciones",
+            tipo: "texto-largo",
+            maximo: 3000
+        }
+    ];
+}
+
+
+async function abrirEnvioNuevo() {
+    tipoFormulario = "envioNuevo";
+    registroEditando = null;
+    idEnvioEntrega = null;
+
+    limpiarErrorFormulario();
+
+    document.getElementById("tituloModal").textContent = "Crear envío";
+
+    document.getElementById("camposModal").innerHTML = `
+        <div class="text-secondary">
+            Cargando opciones...
+        </div>
+    `;
+
+    modalFormulario.show();
+
+    try {
+        document.getElementById("camposModal").innerHTML =
+            await crearCampos(camposEnvioNuevo());
+
+    } catch (error) {
+        modalFormulario.hide();
+        aviso(error.message, "danger");
+    }
+}
+
+
+async function abrirEntrega(id) {
+    tipoFormulario = "entrega";
+    registroEditando = null;
+    idEnvioEntrega = id;
+
+    limpiarErrorFormulario();
+
+    document.getElementById("tituloModal").textContent =
+        `Registrar entrega del envío Nº ${id}`;
+
+    document.getElementById("camposModal").innerHTML =
+        await crearCampos(camposEntrega());
+
+    modalFormulario.show();
+}
+
+
+// --------------------------------------------------
+// RECOLECCIÓN Y ENVÍO DE FORMULARIOS
+// --------------------------------------------------
+
 function recopilarDatos(campos) {
     const datos = {};
 
     for (const campo of campos) {
-        const elemento = document.getElementById(`campo_${campo.nombre}`);
+        const elemento = document.getElementById(
+            `campo_${campo.nombre}`
+        );
 
         if (!elemento) {
             continue;
@@ -734,9 +1156,9 @@ function recopilarDatos(campos) {
             campo.tipo === "decimal" ||
             campo.tipo === "relacion"
         ) {
-            datos[campo.nombre] = valor ? Number(valor) : null;
+            datos[campo.nombre] = valor === "" ? null : Number(valor);
 
-        } else if (campo.tipo === "password" && !valor) {
+        } else if (campo.tipo === "password" && valor === "") {
             continue;
 
         } else {
@@ -751,48 +1173,87 @@ function recopilarDatos(campos) {
     return datos;
 }
 
+
 async function guardarFormulario(evento) {
     evento.preventDefault();
 
-    if (tipoFormulario === "envioNuevo" || tipoFormulario === "entrega") {
+    const boton = document.getElementById("guardarRegistro");
+
+    if (boton.disabled || !tipoFormulario) {
         return;
     }
 
-    const modulo = MODULOS[tipoFormulario];
-    const boton = document.getElementById("guardarRegistro");
-    const datos = recopilarDatos(modulo.campos);
-
     boton.disabled = true;
+    limpiarErrorFormulario();
+
+    const formularioActual = tipoFormulario;
 
     try {
-        if (registroEditando) {
-            await solicitarAPI(
-                `${modulo.ruta}/${registroEditando[modulo.identificador]}`,
-                "PUT",
-                datos
+        let respuesta;
+
+        if (formularioActual === "envioNuevo") {
+            respuesta = await solicitarAPI(
+                "/envios",
+                "POST",
+                recopilarDatos(camposEnvioNuevo())
+            );
+
+        } else if (formularioActual === "entrega") {
+            respuesta = await solicitarAPI(
+                `/envios/${idEnvioEntrega}/entrega`,
+                "POST",
+                recopilarDatos(camposEntrega())
             );
 
         } else {
-            await solicitarAPI(modulo.ruta, "POST", datos);
+            const modulo = MODULOS[formularioActual];
+
+            if (!modulo) {
+                throw new Error("El formulario solicitado no existe");
+            }
+
+            const datos = recopilarDatos(modulo.campos);
+
+            if (registroEditando) {
+                respuesta = await solicitarAPI(
+                    `${modulo.ruta}/${registroEditando[modulo.identificador]}`,
+                    "PUT",
+                    datos
+                );
+
+            } else {
+                respuesta = await solicitarAPI(
+                    modulo.ruta,
+                    "POST",
+                    datos
+                );
+            }
         }
 
         modalFormulario.hide();
 
-        await cargarModulo(tipoFormulario);
+        if (formularioActual === "envioNuevo" || formularioActual === "entrega") {
+            await cargarEnvios();
+        } else {
+            await cargarModulo(formularioActual);
+        }
 
         aviso(
-            registroEditando
-                ? "Registro actualizado correctamente"
-                : "Registro creado correctamente"
+            respuesta.mensaje || "Operación realizada correctamente"
         );
 
     } catch (error) {
-        alert(error.message);
+        mostrarErrorFormulario(error.message);
 
     } finally {
         boton.disabled = false;
     }
 }
+
+
+// --------------------------------------------------
+// DETALLES DE REGISTROS
+// --------------------------------------------------
 
 function mostrarDetalle(registro, titulo = "Detalle del registro") {
     document.getElementById("tituloDetalle").textContent = titulo;
@@ -802,7 +1263,8 @@ function mostrarDetalle(registro, titulo = "Detalle del registro") {
         .map(([campo, valor]) => `
             <dt>${escapar(tituloCampo(campo))}</dt>
             <dd>${escapar(textoValor(valor))}</dd>
-        `).join("");
+        `)
+        .join("");
 
     document.getElementById("contenidoDetalle").innerHTML = `
         <dl class="detalle-tabla mb-0">
@@ -813,6 +1275,11 @@ function mostrarDetalle(registro, titulo = "Detalle del registro") {
     modalDetalle.show();
 }
 
+
+// --------------------------------------------------
+// ACCIONES DEL MÓDULO
+// --------------------------------------------------
+
 async function eventoAcciones(evento) {
     const boton = evento.target.closest("[data-accion]");
 
@@ -820,14 +1287,40 @@ async function eventoAcciones(evento) {
         return;
     }
 
-    if (boton.dataset.accion === "nuevo") {
+    const accion = boton.dataset.accion;
+
+    if (accion === "nuevo") {
         await abrirFormulario(MODULOS[vistaActual]);
     }
 
-    if (boton.dataset.accion === "nuevo-envio") {
+    if (accion === "nuevo-envio") {
         await abrirEnvioNuevo();
     }
 }
+
+
+async function reactivarRegistro(modulo, registro) {
+    const id = registro[modulo.identificador];
+
+    if (vistaActual === "conductores") {
+        return solicitarAPI(
+            `${modulo.ruta}/${id}`,
+            "PUT",
+            { estado: "ACTIVO" }
+        );
+    }
+
+    if (vistaActual === "usuarios") {
+        return solicitarAPI(
+            `${modulo.ruta}/${id}`,
+            "PUT",
+            { activo: true }
+        );
+    }
+
+    throw new Error("Este módulo no admite reactivación");
+}
+
 
 async function eventoTabla(evento) {
     const boton = evento.target.closest("[data-accion]");
@@ -840,7 +1333,8 @@ async function eventoTabla(evento) {
     const id = boton.dataset.id;
 
     if (vistaActual === "envios") {
-        return manejarEnvio(id, accion);
+        await manejarEnvio(id, accion);
+        return;
     }
 
     const modulo = MODULOS[vistaActual];
@@ -858,22 +1352,59 @@ async function eventoTabla(evento) {
     }
 
     if (accion === "detalle") {
-        return mostrarDetalle(
+        mostrarDetalle(
             registro,
             `Detalle de ${modulo.titulo.toLowerCase()}`
         );
+        return;
     }
 
     if (accion === "editar") {
-        return abrirFormulario(modulo, registro);
+        await abrirFormulario(modulo, registro);
+        return;
+    }
+
+    if (accion === "reactivar") {
+        if (!confirm(`¿Querés reactivar el registro ${id}?`)) {
+            return;
+        }
+
+        try {
+            const respuesta = await reactivarRegistro(modulo, registro);
+
+            await cargarModulo(vistaActual);
+
+            aviso(
+                respuesta.mensaje || "Registro reactivado correctamente"
+            );
+
+        } catch (error) {
+            aviso(error.message, "danger");
+        }
+
+        return;
     }
 
     if (accion === "eliminar") {
-        const mensaje = vistaActual === "usuarios"
-            ? "la desactivación"
-            : "la eliminación o baja";
+        let mensaje = `¿Confirmás la eliminación del registro ${id}?`;
 
-        if (!confirm(`¿Confirmás ${mensaje} del registro ${id}?`)) {
+        if (vistaActual === "usuarios") {
+            mensaje = `¿Confirmás desactivar el usuario ${id}?`;
+        }
+
+        if (vistaActual === "conductores" || vistaActual === "clientes") {
+            mensaje =
+                `¿Confirmás eliminar o dar de baja el registro ${id}? ` +
+                "Si tiene historial, sus datos se conservarán.";
+        }
+
+        if (vistaActual === "vehiculos") {
+            mensaje =
+                `¿Confirmás retirar el vehículo ${id}? ` +
+                "Si tiene historial, se conservará en la base de datos.";
+        }
+
+        if (!confirm(mensaje)) {
             return;
         }
 
@@ -895,6 +1426,11 @@ async function eventoTabla(evento) {
     }
 }
 
+
+// --------------------------------------------------
+// ENVÍOS Y SEGUIMIENTO
+// --------------------------------------------------
+
 async function cargarEnvios() {
     establecerTitulo(
         "Envíos y seguimiento",
@@ -903,7 +1439,10 @@ async function cargarEnvios() {
 
     if (usuarioActual.rol !== "CONDUCTOR") {
         document.getElementById("accionesVista").innerHTML = `
-            <button class="btn btn-primary" data-accion="nuevo-envio">
+            <button
+                type="button"
+                class="btn btn-primary"
+                data-accion="nuevo-envio">
                 + Crear envío
             </button>
         `;
@@ -926,6 +1465,7 @@ async function cargarEnvios() {
             const id = registro.id_envio;
 
             let botones = botonAccion("detalle", id, "Ver");
+
             botones += botonAccion("historial", id, "Historial");
 
             if (registro.estado_actual === "PENDIENTE") {
@@ -935,18 +1475,15 @@ async function cargarEnvios() {
                     "Iniciar",
                     "outline-primary"
                 );
-            }
 
-            if (
-                registro.estado_actual === "PENDIENTE" &&
-                usuarioActual.rol !== "CONDUCTOR"
-            ) {
-                botones += botonAccion(
-                    "cancelar",
-                    id,
-                    "Cancelar",
-                    "outline-danger"
-                );
+                if (usuarioActual.rol !== "CONDUCTOR") {
+                    botones += botonAccion(
+                        "cancelar",
+                        id,
+                        "Cancelar",
+                        "outline-danger"
+                    );
+                }
             }
 
             if (registro.estado_actual === "EN_TRANSITO") {
@@ -961,14 +1498,12 @@ async function cargarEnvios() {
             return botones;
         };
 
-        const estados = [
+        const opcionesEstado = [
             "PENDIENTE",
             "EN_TRANSITO",
             "ENTREGADO",
             "CANCELADO"
-        ];
-
-        const opcionesEstado = estados.map(estado => `
+        ].map(estado => `
             <option value="${estado}">
                 ${estado.replaceAll("_", " ")}
             </option>
@@ -977,7 +1512,7 @@ async function cargarEnvios() {
         document.getElementById("contenidoVista").innerHTML = `
             <div class="tarjeta mb-3">
                 <label for="filtroEstado" class="form-label">
-                    Filtrar por estado
+                    Filtrar envíos por estado
                 </label>
 
                 <select id="filtroEstado" class="form-select">
@@ -986,33 +1521,30 @@ async function cargarEnvios() {
                 </select>
             </div>
 
-            <div id="tablaEnvios">
-                ${construirTabla(
-                    registrosActuales,
-                    columnas,
-                    "id_envio",
-                    acciones
-                )}
-            </div>
+            <div id="tablaEnvios"></div>
         `;
 
-        document.getElementById("filtroEstado").addEventListener(
-            "change",
-            evento => {
-                const filtrados = registrosActuales.filter(registro =>
-                    !evento.target.value ||
-                    registro.estado_actual === evento.target.value
-                );
+        const filtro = document.getElementById("filtroEstado");
+        const tabla = document.getElementById("tablaEnvios");
 
-                document.getElementById("tablaEnvios").innerHTML =
-                    construirTabla(
-                        filtrados,
-                        columnas,
-                        "id_envio",
-                        acciones
-                    );
-            }
-        );
+        function actualizarTabla() {
+            const estado = filtro.value;
+
+            const filtrados = registrosActuales.filter(registro =>
+                !estado || registro.estado_actual === estado
+            );
+
+            tabla.innerHTML = construirTabla(
+                filtrados,
+                columnas,
+                "id_envio",
+                acciones
+            );
+        }
+
+        filtro.addEventListener("change", actualizarTabla);
+
+        actualizarTabla();
 
     } catch (error) {
         document.getElementById("contenidoVista").innerHTML = "";
@@ -1020,94 +1552,6 @@ async function cargarEnvios() {
     }
 }
 
-async function abrirEnvioNuevo() {
-    try {
-        const campos = [
-            {
-                nombre: "id_pedido",
-                etiqueta: "Pedido",
-                tipo: "relacion",
-                origen: "pedidos",
-                mostrar: "id_pedido",
-                obligatorio: true
-            },
-            {
-                nombre: "id_vehiculo",
-                etiqueta: "Vehículo",
-                tipo: "relacion",
-                origen: "vehiculos",
-                mostrar: "patente",
-                obligatorio: true
-            },
-            {
-                nombre: "id_conductor",
-                etiqueta: "Conductor",
-                tipo: "relacion",
-                origen: "conductores",
-                mostrar: "nombre",
-                obligatorio: true
-            },
-            {
-                nombre: "fecha_estimada_llegada",
-                etiqueta: "Fecha estimada de llegada",
-                tipo: "fecha",
-                obligatorio: true
-            }
-        ];
-
-        document.getElementById("tituloModal").textContent =
-            "Crear envío";
-
-        document.getElementById("camposModal").innerHTML =
-            '<div class="text-secondary">Cargando opciones...</div>';
-
-        tipoFormulario = "envioNuevo";
-
-        modalFormulario.show();
-
-        document.getElementById("camposModal").innerHTML =
-            await crearCampos(campos);
-
-        document.getElementById("formRegistro").onsubmit = async evento => {
-            evento.preventDefault();
-
-            const boton = document.getElementById("guardarRegistro");
-            boton.disabled = true;
-
-            try {
-                const datos = recopilarDatos(campos);
-
-                await solicitarAPI("/envios", "POST", datos);
-
-                modalFormulario.hide();
-
-                document.getElementById("formRegistro").onsubmit = null;
-
-                await cargarEnvios();
-
-                aviso("Envío creado correctamente");
-
-            } catch (error) {
-                alert(error.message);
-
-            } finally {
-                boton.disabled = false;
-            }
-        };
-
-        document.getElementById("modalFormulario").addEventListener(
-            "hidden.bs.modal",
-            () => {
-                document.getElementById("formRegistro").onsubmit = null;
-            },
-            { once: true }
-        );
-
-    } catch (error) {
-        modalFormulario.hide();
-        aviso(error.message, "danger");
-    }
-}
 
 async function manejarEnvio(id, accion) {
     const envio = registrosActuales.find(registro =>
@@ -1120,30 +1564,39 @@ async function manejarEnvio(id, accion) {
 
     try {
         if (accion === "detalle") {
-            return mostrarDetalle(envio, `Envío Nº ${id}`);
+            mostrarDetalle(envio, `Envío Nº ${id}`);
+            return;
         }
 
         if (accion === "historial") {
-            const historial = await solicitarAPI(
+            const movimientos = await solicitarAPI(
                 `/envios/${id}/historial`
             );
 
-            let contenido = '<p class="text-secondary">Sin movimientos.</p>';
+            let contenido = `
+                <p class="text-secondary">
+                    Este envío todavía no tiene movimientos.
+                </p>
+            `;
 
-            if (historial.length) {
-                const movimientos = historial.map(movimiento => `
+            if (movimientos.length > 0) {
+                const elementos = movimientos.map(movimiento => `
                     <li class="list-group-item">
-                        <strong>${escapar(movimiento.estado)}</strong>
+                        <strong>
+                            ${escapar(movimiento.estado.replaceAll("_", " "))}
+                        </strong>
+
                         <div class="small text-secondary">
                             ${escapar(textoValor(movimiento.fecha_hora))}
-                            · ${escapar(movimiento.responsable || "Sistema")}
+                            ·
+                            ${escapar(movimiento.responsable || "Sistema")}
                         </div>
                     </li>
                 `).join("");
 
                 contenido = `
                     <ul class="list-group">
-                        ${movimientos}
+                        ${elementos}
                     </ul>
                 `;
             }
@@ -1155,7 +1608,6 @@ async function manejarEnvio(id, accion) {
                 contenido;
 
             modalDetalle.show();
-
             return;
         }
 
@@ -1164,11 +1616,15 @@ async function manejarEnvio(id, accion) {
                 ? "EN_TRANSITO"
                 : "CANCELADO";
 
-            if (!confirm(`¿Confirmás cambiar el envío ${id} a ${estado}?`)) {
+            const descripcion = accion === "iniciar"
+                ? "iniciar"
+                : "cancelar";
+
+            if (!confirm(`¿Confirmás ${descripcion} el envío Nº ${id}?`)) {
                 return;
             }
 
-            await solicitarAPI(
+            const respuesta = await solicitarAPI(
                 `/envios/${id}/estado`,
                 "PATCH",
                 { estado }
@@ -1176,84 +1632,15 @@ async function manejarEnvio(id, accion) {
 
             await cargarEnvios();
 
-            aviso("Estado actualizado correctamente");
+            aviso(
+                respuesta.mensaje || "Estado actualizado correctamente"
+            );
 
             return;
         }
 
         if (accion === "entregar") {
-            const campos = [
-                {
-                    nombre: "persona_recibe",
-                    etiqueta: "Nombre de quien recibe",
-                    obligatorio: true,
-                    maximo: 150
-                },
-                {
-                    nombre: "estado_entrega",
-                    etiqueta: "Resultado",
-                    tipo: "opciones",
-                    opciones: [
-                        "CONFORME",
-                        "CON_OBSERVACIONES"
-                    ],
-                    obligatorio: true
-                },
-                {
-                    nombre: "observaciones",
-                    etiqueta: "Observaciones",
-                    tipo: "texto-largo",
-                    maximo: 3000
-                }
-            ];
-
-            document.getElementById("tituloModal").textContent =
-                `Registrar entrega del envío Nº ${id}`;
-
-            tipoFormulario = "entrega";
-
-            document.getElementById("camposModal").innerHTML =
-                await crearCampos(campos);
-
-            modalFormulario.show();
-
-            document.getElementById("formRegistro").onsubmit =
-                async evento => {
-                    evento.preventDefault();
-
-                    const boton = document.getElementById("guardarRegistro");
-                    boton.disabled = true;
-
-                    try {
-                        await solicitarAPI(
-                            `/envios/${id}/entrega`,
-                            "POST",
-                            recopilarDatos(campos)
-                        );
-
-                        modalFormulario.hide();
-
-                        document.getElementById("formRegistro").onsubmit = null;
-
-                        await cargarEnvios();
-
-                        aviso("Entrega registrada correctamente");
-
-                    } catch (error) {
-                        alert(error.message);
-
-                    } finally {
-                        boton.disabled = false;
-                    }
-                };
-
-            document.getElementById("modalFormulario").addEventListener(
-                "hidden.bs.modal",
-                () => {
-                    document.getElementById("formRegistro").onsubmit = null;
-                },
-                { once: true }
-            );
+            await abrirEntrega(id);
         }
 
     } catch (error) {
@@ -1261,4 +1648,12 @@ async function manejarEnvio(id, accion) {
     }
 }
 
-document.addEventListener("DOMContentLoaded", iniciarAplicacion);
+
+// --------------------------------------------------
+// INICIAR LA APLICACIÓN
+// --------------------------------------------------
+
+document.addEventListener(
+    "DOMContentLoaded",
+    iniciarAplicacion
+);
