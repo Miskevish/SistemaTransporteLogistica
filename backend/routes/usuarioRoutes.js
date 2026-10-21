@@ -1,0 +1,11 @@
+const express = require("express");
+const controlador = require("../controllers/usuarioController");
+const { autenticar, permitirRoles } = require("../middleware/autenticacion");
+const { ejecutar } = require("../middleware/errores");
+const router = express.Router();
+router.use(ejecutar(autenticar), permitirRoles("ADMINISTRADOR"));
+router.get("/", ejecutar(controlador.listar));
+router.post("/", ejecutar(controlador.crear));
+router.put("/:id", ejecutar(controlador.actualizar));
+router.delete("/:id", ejecutar(controlador.desactivar));
+module.exports = router;

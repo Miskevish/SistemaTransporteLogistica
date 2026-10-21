@@ -1,0 +1,37 @@
+:root { --azul: #173b57; --azul-oscuro: #102f48; --fondo: #f3f6f9; --borde: #dee5eb; }
+body { background: var(--fondo); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #203247; }
+.ingreso { min-height: 100vh; background: linear-gradient(130deg, #e1edf5, #f7fafc 65%); }
+.tarjeta-ingreso { width: min(100%, 440px); }
+.marca-ingreso { display: flex; align-items: center; gap: 14px; }
+.logo-marca { width: 54px; height: 54px; border-radius: 14px; background: var(--azul); color: white; display: inline-flex; justify-content: center; align-items: center; font-size: 1.25rem; font-weight: 800; letter-spacing: -1px; flex-shrink: 0; }
+.logo-pequeno { width: 36px; height: 36px; border-radius: 10px; font-size: .9rem; }
+.btn-primary { background: #19557e; border-color: #19557e; }
+.btn-primary:hover { background: #123e5d; border-color: #123e5d; }
+.cabecera { height: 70px; background: white; border-bottom: 1px solid var(--borde); position: sticky; top: 0; z-index: 20; }
+.distribucion { display: flex; min-height: calc(100vh - 70px); }
+.lateral { width: 245px; background: var(--azul-oscuro); color: #e6f1fa; padding: 22px 13px; flex-shrink: 0; }
+.menu-titulo { letter-spacing: .1em; font-size: .72rem; opacity: .65; margin: 6px 13px 15px; }
+.enlace-menu { display: block; width: 100%; text-align: left; color: #d9e6f0; border: 0; background: transparent; padding: 12px 15px; border-radius: 10px; font-weight: 500; }
+.enlace-menu:hover, .enlace-menu.activo { background: #26526d; color: white; }
+.contenido { width: 100%; min-width: 0; }
+.tarjeta, .tabla-contenedor { background: white; border: 1px solid var(--borde); border-radius: 15px; }
+.tarjeta { padding: 21px; }
+.numero-panel { font-size: 2rem; font-weight: 750; color: var(--azul); }
+.tabla-contenedor { overflow: auto; }
+.table { margin-bottom: 0; }
+.table thead th { background: #f4f7fa; color: #496074; font-size: .82rem; font-weight: 650; white-space: nowrap; }
+.table td, .table th { padding: 13px 15px; vertical-align: middle; }
+.table td { font-size: .91rem; }
+.texto-recortado { max-width: 240px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.estado { padding: 5px 10px; border-radius: 40px; background: #eaf1f6; color: #28516b; font-size: .79rem; font-weight: 650; display: inline-block; }
+.estado.ENTREGADO, .estado.ACTIVO, .estado.DISPONIBLE, .estado.CONFORME { background: #e1f4e7; color: #156034; }
+.estado.CANCELADO, .estado.INACTIVO, .estado.MANTENIMIENTO { background: #fae6e5; color: #9f3432; }
+.estado.EN_TRANSITO, .estado.EN_VIAJE { background: #fff1d9; color: #885a12; }
+.acciones-tabla { display: flex; gap: 6px; white-space: nowrap; }
+.vacio { padding: 38px; text-align: center; color: #627488; }
+#alertas .alert { margin-bottom: 18px; }
+.detalle-tabla { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 8px 20px; }
+.detalle-tabla dt { color: #66788b; }
+.detalle-tabla dd { overflow-wrap: anywhere; }
+@media (max-width: 991px) { .lateral { display: none; position: fixed; z-index: 19; top: 70px; bottom: 0; left: 0; box-shadow: 8px 0 30px #0002; overflow-y: auto; } .lateral.abierto { display: block; } }
+@media (max-width: 575px) { .cabecera .fw-bold { font-size: .88rem; } .contenido { padding: 16px !important; } .tarjeta { padding: 15px; } }

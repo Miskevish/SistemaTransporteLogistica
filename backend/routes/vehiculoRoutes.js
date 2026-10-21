@@ -1,0 +1,13 @@
+const express = require("express");
+const controlador = require("../controllers/vehiculoController");
+const { ejecutar } = require("../middleware/errores");
+const { autenticar, permitirRoles } = require("../middleware/autenticacion");
+
+const router = express.Router();
+router.use(ejecutar(autenticar));
+router.get("/", permitirRoles("ADMINISTRADOR", "OPERADOR"), ejecutar(controlador.listar));
+router.get("/:id", permitirRoles("ADMINISTRADOR", "OPERADOR"), ejecutar(controlador.buscar));
+router.post("/", permitirRoles("ADMINISTRADOR"), ejecutar(controlador.crear));
+router.put("/:id", permitirRoles("ADMINISTRADOR"), ejecutar(controlador.actualizar));
+router.delete("/:id", permitirRoles("ADMINISTRADOR"), ejecutar(controlador.eliminar));
+module.exports = router;

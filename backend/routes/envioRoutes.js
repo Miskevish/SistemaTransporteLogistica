@@ -1,0 +1,13 @@
+const express = require("express");
+const controlador = require("../controllers/envioController");
+const { autenticar, permitirRoles } = require("../middleware/autenticacion");
+const { ejecutar } = require("../middleware/errores");
+const router = express.Router();
+router.use(ejecutar(autenticar));
+router.get("/", ejecutar(controlador.listar));
+router.get("/:id", ejecutar(controlador.buscar));
+router.get("/:id/historial", ejecutar(controlador.historial));
+router.post("/", permitirRoles("ADMINISTRADOR", "OPERADOR"), ejecutar(controlador.crear));
+router.patch("/:id/estado", ejecutar(controlador.cambiarEstado));
+router.post("/:id/entrega", ejecutar(controlador.entregar));
+module.exports = router;
