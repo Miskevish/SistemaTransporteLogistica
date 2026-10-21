@@ -1,7 +1,15 @@
 
 const pool = require("../db");
+
 const { crearError } = require("../middleware/errores");
-const { entero, fecha, opcion, texto } = require("../validators/validaciones");
+
+const {
+    entero,
+    fecha,
+    opcion,
+    texto
+} = require("../validators/validaciones");
+
 
 const ESTADOS_ENVIO = [
     "PENDIENTE",
@@ -9,6 +17,7 @@ const ESTADOS_ENVIO = [
     "ENTREGADO",
     "CANCELADO"
 ];
+
 
 async function obtenerEnvio(id, usuario, conexion = pool, bloquear = false) {
     const idEnvio = entero(id, "id_envio");
@@ -41,7 +50,6 @@ async function listar(usuario, estado) {
 
     if (usuario.rol === "CONDUCTOR") {
         parametros.push(usuario.id_conductor);
-
         consulta += ` AND id_conductor = $${parametros.length}`;
     }
 
@@ -49,7 +57,6 @@ async function listar(usuario, estado) {
         opcion(estado, "estado", ESTADOS_ENVIO);
 
         parametros.push(estado);
-
         consulta += ` AND estado_actual = $${parametros.length}`;
     }
 
@@ -66,7 +73,7 @@ async function crear(datos, usuario) {
     const idVehiculo = entero(datos.id_vehiculo, "id_vehiculo");
     const idConductor = entero(datos.id_conductor, "id_conductor");
 
-    const llegada = fecha(
+    const fechaLlegada = fecha(
         datos.fecha_estimada_llegada,
         "fecha_estimada_llegada"
     );
@@ -76,21 +83,24 @@ async function crear(datos, usuario) {
     try {
         await conexion.query("BEGIN");
 
-        // Evitar que dos solicitudes asignen el mismo vehículo.
+        // Bloquear la asignación simultánea del mismo vehículo.
         await conexion.query(
             "SELECT pg_advisory_xact_lock($1, $2)",
             [1, idVehiculo]
         );
 
-        // Evitar que dos solicitudes asignen el mismo conductor.
+        // Bloquear la asignación simultánea del mismo conductor.
         await conexion.query(
             "SELECT pg_advisory_xact_lock($1, $2)",
             [2, idConductor]
         );
 
-        // Comprobar que el pedido exista.
+        // Verificar que el pedido exista.
         const resultadoPedido = await conexion.query(
-            "SELECT * FROM pedido WHERE id_pedido = $1 FOR UPDATE",
+            `SELECT *
+             FROM pedido
+             WHERE id_pedido = $1
+             FOR UPDATE`,
             [idPedido]
         );
 
@@ -100,9 +110,12 @@ async function crear(datos, usuario) {
             throw crearError(404, "El pedido no existe");
         }
 
-        // Comprobar que el cliente esté activo.
+        // Verificar que el cliente esté activo.
         const resultadoCliente = await conexion.query(
-            "SELECT activo FROM cliente WHERE id_cliente = $1",
+            `SELECT activo
+             FROM cliente
+             WHERE id_cliente = $1
+             FOR SHARE`,
             [pedido.id_cliente]
         );
 
@@ -112,29 +125,38 @@ async function crear(datos, usuario) {
             throw crearError(409, "El cliente está dado de baja");
         }
 
-        // Un pedido solo puede tener un envío.
+        // Cada pedido puede generar un único envío.
         const resultadoExistente = await conexion.query(
-            "SELECT 1 FROM envio WHERE id_pedido = $1",
+            `SELECT 1
+             FROM envio
+             WHERE id_pedido = $1`,
             [idPedido]
         );
 
-        if (resultadoExistente.rows.length > 0) {
+        if (resultadoExistente.rowCount > 0) {
             throw crearError(409, "Este pedido ya tiene un envío");
         }
 
         // Comprobar que el vehículo esté disponible.
         const resultadoVehiculo = await conexion.query(
-            "SELECT * FROM vehiculo WHERE id_vehiculo = $1 FOR UPDATE",
+            `SELECT *
+             FROM vehiculo
+             WHERE id_vehiculo = $1
+             FOR UPDATE`,
             [idVehiculo]
         );
 
         const vehiculo = resultadoVehiculo.rows[0];
 
-        if (!vehiculo || vehiculo.estado !== "DISPONIBLE") {
+        if (!vehiculo) {
+            throw crearError(404, "El vehículo no existe");
+        }
+
+        if (vehiculo.estado !== "DISPONIBLE") {
             throw crearError(409, "El vehículo no está disponible");
         }
 
-        // Comprobar la capacidad de carga.
+        // Comprobar que el vehículo soporte el peso de la carga.
         if (Number(vehiculo.capacidad) < Number(pedido.peso)) {
             throw crearError(
                 409,
@@ -144,34 +166,58 @@ async function crear(datos, usuario) {
 
         // Comprobar que el conductor esté activo.
         const resultadoConductor = await conexion.query(
-            "SELECT * FROM conductor WHERE id_conductor = $1 FOR UPDATE",
+            `SELECT *
+             FROM conductor
+             WHERE id_conductor = $1
+             FOR UPDATE`,
             [idConductor]
         );
 
         const conductor = resultadoConductor.rows[0];
 
-        if (!conductor || conductor.estado !== "ACTIVO") {
+        if (!conductor) {
+            throw crearError(404, "El conductor no existe");
+        }
+
+        if (conductor.estado !== "ACTIVO") {
             throw crearError(409, "El conductor no está activo");
         }
 
-        // Comprobar que los recursos no estén asignados.
+        // Evitar asignaciones duplicadas en envíos activos.
         const resultadoOcupado = await conexion.query(
             `SELECT 1
              FROM envio
              WHERE estado_actual IN ('PENDIENTE', 'EN_TRANSITO')
-             AND (id_vehiculo = $1 OR id_conductor = $2)
+               AND (id_vehiculo = $1 OR id_conductor = $2)
              LIMIT 1`,
             [idVehiculo, idConductor]
         );
 
-        if (resultadoOcupado.rows.length > 0) {
+        if (resultadoOcupado.rowCount > 0) {
             throw crearError(
                 409,
                 "El vehículo o conductor ya está asignado a otro envío activo"
             );
         }
 
-        // Registrar el envío.
+        // Comprobar que la fecha estimada de llegada sea válida.
+        const resultadoFecha = await conexion.query(
+            `SELECT
+                $1::DATE >= CURRENT_DATE AS fecha_valida,
+                $1::DATE >= $2::DATE AS fecha_pedido_valida`,
+            [fechaLlegada, pedido.fecha_estimada]
+        );
+
+        const fechas = resultadoFecha.rows[0];
+
+        if (!fechas.fecha_valida || !fechas.fecha_pedido_valida) {
+            throw crearError(
+                400,
+                "La fecha estimada de llegada no puede ser anterior a hoy ni a la fecha del pedido"
+            );
+        }
+
+        // Registrar el envío con estado pendiente.
         const resultadoEnvio = await conexion.query(
             `INSERT INTO envio (
                 id_pedido,
@@ -182,20 +228,25 @@ async function crear(datos, usuario) {
              )
              VALUES ($1, $2, $3, $4, 'PENDIENTE')
              RETURNING *`,
-            [idPedido, idVehiculo, idConductor, llegada]
+            [
+                idPedido,
+                idVehiculo,
+                idConductor,
+                fechaLlegada
+            ]
         );
 
         const envio = resultadoEnvio.rows[0];
 
-        // Registrar el primer movimiento del historial.
+        // Guardar el estado inicial en el historial.
         await conexion.query(
             `INSERT INTO estado_envio (
                 id_envio,
                 estado,
                 id_usuario
              )
-             VALUES ($1, $2, $3)`,
-            [envio.id_envio, "PENDIENTE", usuario.id_usuario]
+             VALUES ($1, 'PENDIENTE', $2)`,
+            [envio.id_envio, usuario.id_usuario]
         );
 
         await conexion.query("COMMIT");
@@ -226,7 +277,6 @@ async function cambiarEstado(id, estado, usuario) {
     try {
         await conexion.query("BEGIN");
 
-        // Obtener el envío y bloquearlo durante la operación.
         const envio = await obtenerEnvio(
             idEnvio,
             usuario,
@@ -238,11 +288,11 @@ async function cambiarEstado(id, estado, usuario) {
         if (estado === "CANCELADO" && usuario.rol === "CONDUCTOR") {
             throw crearError(
                 403,
-                "Solo administración u operaciones pueden cancelar envíos"
+                "Solo el administrador o el operador pueden cancelar envíos"
             );
         }
 
-        // Solo se puede modificar un envío pendiente.
+        // Solo los envíos pendientes pueden iniciarse o cancelarse.
         if (envio.estado_actual !== "PENDIENTE") {
             throw crearError(
                 409,
@@ -250,26 +300,44 @@ async function cambiarEstado(id, estado, usuario) {
             );
         }
 
-        // Actualizar el estado del envío.
         if (estado === "EN_TRANSITO") {
-            await conexion.query(
-                `UPDATE envio
-                 SET estado_actual = $1,
-                     fecha_salida = CURRENT_TIMESTAMP
-                 WHERE id_envio = $2`,
-                [estado, idEnvio]
+            // Marcar el vehículo como ocupado antes de iniciar el viaje.
+            // Esta operación es parte de la misma transacción que el envío.
+            const resultadoVehiculo = await conexion.query(
+                `UPDATE vehiculo
+                 SET estado = 'EN_VIAJE'
+                 WHERE id_vehiculo = $1
+                   AND estado = 'DISPONIBLE'
+                 RETURNING id_vehiculo`,
+                [envio.id_vehiculo]
             );
 
-        } else {
+            if (resultadoVehiculo.rowCount === 0) {
+                throw crearError(
+                    409,
+                    "El vehículo no está disponible para iniciar el envío"
+                );
+            }
+
+            // Registrar el inicio del viaje y su fecha de salida.
             await conexion.query(
                 `UPDATE envio
-                 SET estado_actual = $1
-                 WHERE id_envio = $2`,
-                [estado, idEnvio]
+                 SET estado_actual = 'EN_TRANSITO',
+                     fecha_salida = CURRENT_TIMESTAMP
+                 WHERE id_envio = $1`,
+                [idEnvio]
+            );
+        } else {
+            // Un envío pendiente se cancela sin borrar su historial.
+            await conexion.query(
+                `UPDATE envio
+                 SET estado_actual = 'CANCELADO'
+                 WHERE id_envio = $1`,
+                [idEnvio]
             );
         }
 
-        // Guardar el cambio en el historial.
+        // Registrar el cambio de estado.
         await conexion.query(
             `INSERT INTO estado_envio (
                 id_envio,
@@ -277,7 +345,11 @@ async function cambiarEstado(id, estado, usuario) {
                 id_usuario
              )
              VALUES ($1, $2, $3)`,
-            [idEnvio, estado, usuario.id_usuario]
+            [
+                idEnvio,
+                estado,
+                usuario.id_usuario
+            ]
         );
 
         await conexion.query("COMMIT");
@@ -300,14 +372,14 @@ async function cambiarEstado(id, estado, usuario) {
 async function registrarEntrega(id, datos, usuario) {
     const idEnvio = entero(id, "id_envio");
 
-    const receptor = texto(
+    const personaRecibe = texto(
         datos.persona_recibe,
         "persona_recibe",
         150,
         true
     );
 
-    const resultadoEntrega = opcion(
+    const estadoEntrega = opcion(
         datos.estado_entrega,
         "estado_entrega",
         ["CONFORME", "CON_OBSERVACIONES"]
@@ -319,14 +391,10 @@ async function registrarEntrega(id, datos, usuario) {
         3000
     );
 
-    // Si la entrega tiene observaciones, deben registrarse.
-    if (
-        resultadoEntrega === "CON_OBSERVACIONES" &&
-        !observaciones
-    ) {
+    if (estadoEntrega === "CON_OBSERVACIONES" && !observaciones) {
         throw crearError(
             400,
-            "Escribí las observaciones de la entrega"
+            "Tenés que indicar las observaciones de la entrega"
         );
     }
 
@@ -342,16 +410,16 @@ async function registrarEntrega(id, datos, usuario) {
             true
         );
 
-        // Solo se puede entregar un envío en tránsito.
+        // Solo se pueden entregar envíos en tránsito.
         if (envio.estado_actual !== "EN_TRANSITO") {
             throw crearError(
                 409,
-                "Solo se puede entregar un envío en tránsito"
+                "Solo se puede registrar la entrega de un envío en tránsito"
             );
         }
 
-        // Registrar los datos de la entrega.
-        const resultado = await conexion.query(
+        // Registrar la entrega.
+        const resultadoEntrega = await conexion.query(
             `INSERT INTO entrega (
                 id_envio,
                 persona_recibe,
@@ -362,13 +430,13 @@ async function registrarEntrega(id, datos, usuario) {
              RETURNING *`,
             [
                 idEnvio,
-                receptor,
+                personaRecibe,
                 observaciones,
-                resultadoEntrega
+                estadoEntrega
             ]
         );
 
-        const entrega = resultado.rows[0];
+        const entrega = resultadoEntrega.rows[0];
 
         // Marcar el envío como entregado.
         await conexion.query(
@@ -378,7 +446,25 @@ async function registrarEntrega(id, datos, usuario) {
             [idEnvio]
         );
 
-        // Guardar el estado en el historial.
+        // Liberar el vehículo después de completar la entrega.
+        // Si no está EN_VIAJE, se trata de una inconsistencia de estado.
+        const resultadoVehiculo = await conexion.query(
+            `UPDATE vehiculo
+             SET estado = 'DISPONIBLE'
+             WHERE id_vehiculo = $1
+               AND estado = 'EN_VIAJE'
+             RETURNING id_vehiculo`,
+            [envio.id_vehiculo]
+        );
+
+        if (resultadoVehiculo.rowCount === 0) {
+            throw crearError(
+                409,
+                "El vehículo no figura en viaje; no se pudo finalizar la entrega"
+            );
+        }
+
+        // Guardar el último movimiento en el historial.
         await conexion.query(
             `INSERT INTO estado_envio (
                 id_envio,
@@ -386,7 +472,10 @@ async function registrarEntrega(id, datos, usuario) {
                 id_usuario
              )
              VALUES ($1, 'ENTREGADO', $2)`,
-            [idEnvio, usuario.id_usuario]
+            [
+                idEnvio,
+                usuario.id_usuario
+            ]
         );
 
         await conexion.query("COMMIT");
@@ -406,7 +495,7 @@ async function registrarEntrega(id, datos, usuario) {
 async function historial(id, usuario) {
     const idEnvio = entero(id, "id_envio");
 
-    // Verificar que el usuario pueda consultar el envío.
+    // Comprobar que el usuario tenga acceso al envío.
     await obtenerEnvio(idEnvio, usuario);
 
     const resultado = await pool.query(

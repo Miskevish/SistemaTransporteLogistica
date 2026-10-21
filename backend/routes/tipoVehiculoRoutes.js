@@ -1,13 +1,67 @@
+
 const express = require("express");
-const controlador = require("../controllers/tipoVehiculoController");
+
+const tipoVehiculoController = require("../controllers/tipoVehiculoController");
+
+const {
+    autenticar,
+    permitirRoles
+} = require("../middleware/autenticacion");
+
 const { ejecutar } = require("../middleware/errores");
-const { autenticar, permitirRoles } = require("../middleware/autenticacion");
+
 
 const router = express.Router();
-router.use(ejecutar(autenticar));
-router.get("/", permitirRoles("ADMINISTRADOR", "OPERADOR"), ejecutar(controlador.listar));
-router.get("/:id", permitirRoles("ADMINISTRADOR", "OPERADOR"), ejecutar(controlador.buscar));
-router.post("/", permitirRoles("ADMINISTRADOR"), ejecutar(controlador.crear));
-router.put("/:id", permitirRoles("ADMINISTRADOR"), ejecutar(controlador.actualizar));
-router.delete("/:id", permitirRoles("ADMINISTRADOR"), ejecutar(controlador.eliminar));
+
+
+// Todas las rutas requieren una sesión válida.
+router.use(
+    ejecutar(autenticar)
+);
+
+
+// Listar todos los tipos de vehículos.
+// Administradores y operadores pueden consultar.
+router.get(
+    "/",
+    permitirRoles("ADMINISTRADOR", "OPERADOR"),
+    ejecutar(tipoVehiculoController.listar)
+);
+
+
+// Consultar un tipo de vehículo por su identificador.
+router.get(
+    "/:id",
+    permitirRoles("ADMINISTRADOR", "OPERADOR"),
+    ejecutar(tipoVehiculoController.buscar)
+);
+
+
+// Registrar un nuevo tipo de vehículo.
+// Solo los administradores pueden crear registros.
+router.post(
+    "/",
+    permitirRoles("ADMINISTRADOR"),
+    ejecutar(tipoVehiculoController.crear)
+);
+
+
+// Modificar la descripción de un tipo de vehículo.
+// Solo los administradores pueden actualizar registros.
+router.put(
+    "/:id",
+    permitirRoles("ADMINISTRADOR"),
+    ejecutar(tipoVehiculoController.actualizar)
+);
+
+
+// Eliminar un tipo de vehículo.
+// Solo se permite cuando no existen vehículos asociados.
+router.delete(
+    "/:id",
+    permitirRoles("ADMINISTRADOR"),
+    ejecutar(tipoVehiculoController.eliminar)
+);
+
+
 module.exports = router;

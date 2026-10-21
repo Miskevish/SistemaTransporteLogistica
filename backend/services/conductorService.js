@@ -11,29 +11,106 @@ const {
 const { crearError } = require("../middleware/errores");
 
 
+const ESTADOS_CONDUCTOR = [
+    "ACTIVO",
+    "INACTIVO"
+];
+
+
 function validarConductor(datos) {
     const conductor = {
-        dni: texto(datos.dni, "dni", 15, true),
-        apellido: texto(datos.apellido, "apellido", 100, true),
-        nombre: texto(datos.nombre, "nombre", 100, true),
-        licencia: texto(datos.licencia, "licencia", 50, true),
-        telefono: texto(datos.telefono, "telefono", 30, false),
+        dni: texto(
+            datos.dni,
+            "dni",
+            15,
+            true
+        ),
+
+        apellido: texto(
+            datos.apellido,
+            "apellido",
+            100,
+            true
+        ),
+
+        nombre: texto(
+            datos.nombre,
+            "nombre",
+            100,
+            true
+        ),
+
+        licencia: texto(
+            datos.licencia,
+            "licencia",
+            50,
+            true
+        ),
+
+        telefono: texto(
+            datos.telefono,
+            "telefono",
+            30,
+            false
+        ),
+
         email: correo(datos.email),
+
         estado: opcion(
             datos.estado || "ACTIVO",
             "estado",
-            ["ACTIVO", "INACTIVO"]
+            ESTADOS_CONDUCTOR
         )
     };
 
     if (!/^\d{7,9}$/.test(conductor.dni)) {
         throw crearError(
             400,
-            "El DNI debe contener entre 7 y 9 números"
+            "El DNI debe contener entre 7 y 9 dígitos"
         );
     }
 
     return conductor;
+}
+
+
+async function verificarEnviosActivos(idConductor, conexion = pool) {
+    const resultado = await conexion.query(
+        `SELECT id_envio
+         FROM envio
+         WHERE id_conductor = $1
+           AND estado_actual IN ('PENDIENTE', 'EN_TRANSITO')
+         LIMIT 1`,
+        [idConductor]
+    );
+
+    return resultado.rows.length > 0;
+}
+
+
+async function verificarHistorialEnvios(idConductor, conexion = pool) {
+    const resultado = await conexion.query(
+        `SELECT 1
+         FROM envio
+         WHERE id_conductor = $1
+         LIMIT 1`,
+        [idConductor]
+    );
+
+    return resultado.rows.length > 0;
+}
+
+
+async function verificarCuentaAsociada(idConductor, conexion = pool) {
+    const resultado = await conexion.query(
+        `SELECT 1
+         FROM usuario
+         WHERE id_conductor = $1
+         LIMIT 1`,
+        [idConductor]
+    );
+
+    return resultado.rows.length > 0;
 }
 
 
@@ -100,6 +177,13 @@ async function actualizar(id, datos) {
     try {
         await conexion.query("BEGIN");
 
+        // Coordinar los cambios con la asignación de envíos.
+        await conexion.query(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            [2, idConductor]
+        );
+
+        // Bloquear el registro mientras se modifica.
         const resultadoAnterior = await conexion.query(
             `SELECT *
              FROM conductor
@@ -111,28 +195,29 @@ async function actualizar(id, datos) {
         const anterior = resultadoAnterior.rows[0];
 
         if (!anterior) {
-            throw crearError(404, "Conductor no encontrado");
+            throw crearError(
+                404,
+                "El conductor no existe"
+            );
         }
 
+        // Combinar los datos anteriores con los nuevos.
         const conductor = validarConductor({
             ...anterior,
             ...datos
         });
 
+        // No permitir desactivar conductores con envíos activos.
         if (conductor.estado === "INACTIVO") {
-            const resultadoEnvios = await conexion.query(
-                `SELECT 1
-                 FROM envio
-                 WHERE id_conductor = $1
-                   AND estado_actual IN ('PENDIENTE', 'EN_TRANSITO')
-                 LIMIT 1`,
-                [idConductor]
+            const tieneEnviosActivos = await verificarEnviosActivos(
+                idConductor,
+                conexion
             );
 
-            if (resultadoEnvios.rowCount > 0) {
+            if (tieneEnviosActivos) {
                 throw crearError(
                     409,
-                    "No se puede desactivar un conductor que tiene envíos activos"
+                    "No se puede desactivar un conductor con envíos pendientes o en tránsito"
                 );
             }
         }
@@ -182,6 +267,13 @@ async function eliminar(id) {
     try {
         await conexion.query("BEGIN");
 
+        // Evitar conflictos con nuevas asignaciones de envíos.
+        await conexion.query(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            [2, idConductor]
+        );
+
+        // Buscar y bloquear el conductor.
         const resultadoConductor = await conexion.query(
             `SELECT *
              FROM conductor
@@ -193,49 +285,42 @@ async function eliminar(id) {
         const conductor = resultadoConductor.rows[0];
 
         if (!conductor) {
-            throw crearError(404, "Conductor no encontrado");
-        }
-
-        const resultadoEnviosActivos = await conexion.query(
-            `SELECT 1
-             FROM envio
-             WHERE id_conductor = $1
-               AND estado_actual IN ('PENDIENTE', 'EN_TRANSITO')
-             LIMIT 1`,
-            [idConductor]
-        );
-
-        if (resultadoEnviosActivos.rowCount > 0) {
             throw crearError(
-                409,
-                "No se puede eliminar un conductor con envíos pendientes o en tránsito"
+                404,
+                "El conductor no existe"
             );
         }
 
-        const resultadoHistorial = await conexion.query(
-            `SELECT 1
-             FROM envio
-             WHERE id_conductor = $1
-             LIMIT 1`,
-            [idConductor]
+        // No permitir bajas con envíos pendientes o en tránsito.
+        const tieneEnviosActivos = await verificarEnviosActivos(
+            idConductor,
+            conexion
         );
 
-        const resultadoUsuarios = await conexion.query(
-            `SELECT 1
-             FROM usuario
-             WHERE id_conductor = $1
-             LIMIT 1`,
-            [idConductor]
+        if (tieneEnviosActivos) {
+            throw crearError(
+                409,
+                "No se puede dar de baja un conductor con envíos pendientes o en tránsito"
+            );
+        }
+
+        // Comprobar si existen registros relacionados.
+        const tieneHistorial = await verificarHistorialEnvios(
+            idConductor,
+            conexion
         );
 
-        const tieneHistorial = resultadoHistorial.rowCount > 0;
-        const tieneCuenta = resultadoUsuarios.rowCount > 0;
+        const tieneCuenta = await verificarCuentaAsociada(
+            idConductor,
+            conexion
+        );
 
+        // Si tiene relaciones, conservar el registro mediante baja lógica.
         if (tieneHistorial || tieneCuenta) {
             if (conductor.estado === "INACTIVO") {
                 throw crearError(
                     409,
-                    "El conductor ya se encuentra dado de baja"
+                    "El conductor ya está dado de baja y tiene registros asociados"
                 );
             }
 
@@ -255,6 +340,7 @@ async function eliminar(id) {
             };
         }
 
+        // Sin relaciones, el conductor se elimina definitivamente.
         const resultadoEliminado = await conexion.query(
             `DELETE FROM conductor
              WHERE id_conductor = $1
