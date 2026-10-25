@@ -1,0 +1,327 @@
+
+/* ==========================================
+   IDENTIDAD VISUAL
+========================================== */
+
+:root {
+    --grafito: #20252B;
+    --arena: #A88351;
+    --hueso: #FAF7F5;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+}
+
+body {
+    background: var(--hueso);
+    color: var(--grafito);
+    font-family: "Montserrat", sans-serif;
+}
+
+
+/* ==========================================
+   CONTENEDOR PRINCIPAL
+========================================== */
+
+.pagina-error {
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 60px 20px;
+}
+
+.contenido-error {
+    width: 100%;
+    max-width: 710px;
+
+    margin: 0 auto;
+    text-align: center;
+}
+
+
+/* ==========================================
+   ÍCONO
+========================================== */
+
+.icono-error {
+    position: relative;
+
+    width: 105px;
+    height: 105px;
+
+    margin: 0 auto 30px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #EEE6DC;
+    border-radius: 24px;
+
+    color: var(--grafito);
+    font-size: 3.5rem;
+}
+
+.signo-error {
+    position: absolute;
+
+    top: -10px;
+    right: -11px;
+
+    width: 37px;
+    height: 37px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: var(--arena);
+    color: var(--hueso);
+
+    font-size: 1.25rem;
+}
+
+
+/* ==========================================
+   TEXTOS
+========================================== */
+
+.etiqueta-error {
+    display: block;
+
+    margin-bottom: 8px;
+
+    color: #80613B;
+
+    font-size: 0.78rem;
+    font-weight: 700;
+
+    letter-spacing: 0.19em;
+}
+
+.numero-error {
+    margin: 0;
+
+    color: var(--grafito);
+
+    font-size: clamp(6rem, 18vw, 10.5rem);
+    font-weight: 800;
+
+    line-height: 1.1;
+    letter-spacing: -0.075em;
+}
+
+.titulo-error {
+    margin: 12px auto 20px;
+
+    max-width: 630px;
+
+    color: var(--grafito);
+
+    font-size: clamp(1.55rem, 3.6vw, 2.3rem);
+    font-weight: 700;
+
+    line-height: 1.35;
+}
+
+.descripcion-error {
+    max-width: 530px;
+
+    margin: 0 auto 32px;
+
+    color: #55585B;
+
+    font-size: 1rem;
+    line-height: 1.9;
+}
+
+
+/* ==========================================
+   BOTÓN DE REGRESO
+========================================== */
+
+.btn-volver {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 11px;
+
+    padding: 14px 27px;
+
+    border: 2px solid var(--grafito);
+    border-radius: 10px;
+
+    background: var(--grafito);
+    color: var(--hueso);
+
+    font-size: 0.94rem;
+    font-weight: 700;
+
+    text-decoration: none;
+
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.btn-volver:hover,
+.btn-volver:focus-visible {
+    background: #3B4147;
+    border-color: #3B4147;
+    color: var(--hueso);
+
+    transform: translateY(-2px);
+}
+
+.btn-volver:focus-visible {
+    outline: 3px solid var(--arena);
+    outline-offset: 4px;
+}
+
+
+/* ==========================================
+   RUTA DECORATIVA
+========================================== */
+
+.ruta-decorativa {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 12px;
+
+    margin-top: 50px;
+
+    color: var(--arena);
+}
+
+.punto-ruta {
+    width: 11px;
+    height: 11px;
+
+    border: 3px solid var(--arena);
+    border-radius: 50%;
+}
+
+.linea-ruta {
+    width: 130px;
+
+    border-top: 3px dashed var(--arena);
+}
+
+.ruta-decorativa i {
+    font-size: 1.45rem;
+}
+
+
+/* ==========================================
+   TABLETS
+========================================== */
+
+@media (max-width: 991px) {
+
+    .pagina-error {
+        padding: 50px 22px;
+    }
+
+    .contenido-error {
+        max-width: 600px;
+    }
+
+    .numero-error {
+        font-size: clamp(6rem, 20vw, 9rem);
+    }
+}
+
+
+/* ==========================================
+   CELULARES
+========================================== */
+
+@media (max-width: 575px) {
+
+    .pagina-error {
+        padding: 35px 18px;
+    }
+
+    .icono-error {
+        width: 85px;
+        height: 85px;
+
+        margin-bottom: 26px;
+
+        font-size: 2.8rem;
+        border-radius: 20px;
+    }
+
+    .signo-error {
+        width: 31px;
+        height: 31px;
+
+        font-size: 1rem;
+    }
+
+    .etiqueta-error {
+        font-size: 0.67rem;
+        letter-spacing: 0.12em;
+    }
+
+    .numero-error {
+        font-size: clamp(5.5rem, 25vw, 7rem);
+    }
+
+    .titulo-error {
+        font-size: clamp(1.4rem, 6vw, 1.8rem);
+        margin-top: 10px;
+    }
+
+    .descripcion-error {
+        font-size: 0.89rem;
+        line-height: 1.8;
+    }
+
+    .btn-volver {
+        width: 100%;
+        max-width: 300px;
+
+        padding: 13px 20px;
+    }
+
+    .ruta-decorativa {
+        margin-top: 35px;
+    }
+
+    .linea-ruta {
+        width: 90px;
+    }
+}
+
+
+/* ==========================================
+   ACCESIBILIDAD
+========================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
