@@ -1,122 +1,111 @@
-# Sistema de Transporte y Logística
+TRAMO — Sistema de Transporte y Logística
+Trabajo Práctico Integral — Taller Integrador II
 
-**Trabajo Práctico Integral — Taller Integrador II**
+Integrantes: Nicolás José Miskevish · Ana Paula Soler · Braiton Juárez Isa
+Descripción
+Tramo es una aplicación web para gestionar las operaciones de una empresa de transporte y logística. Centraliza clientes, pedidos, vehículos, conductores, envíos y entregas, e incorpora autenticación, permisos por rol, historial de estados e indicadores operativos.
 
-**Integrantes:** Nicolás José Miskevish · Ana Paula Soler · Braiton Juárez Isa
+El proyecto utiliza una arquitectura cliente-servidor: el frontend se comunica mediante HTTP/JSON con una API REST construida con Node.js y Express; los servicios aplican las reglas de negocio y almacenan la información en PostgreSQL.
 
-## Descripción
+La aplicación incluye una página pública con identidad visual de Tramo, carrusel informativo, sección de servicios, acceso al sistema y página de error 404. Los paneles de Administrador, Operador y Conductor, sus tablas y sus modales son responsive.
+Tecnologías
+Capa	Tecnologías
+Frontend	HTML5, CSS3, Bootstrap 5.3.3, Bootstrap Icons y JavaScript puro
+Backend	Node.js y Express.js
+Base de datos	PostgreSQL 16
+Acceso a la base de datos	pg (pool de conexiones)
+Autenticación	JWT y bcryptjs
+Herramientas	Visual Studio Code, Live Server y pgAdmin 4
+Control de versiones	Git y GitHub
+Organización	Trello
 
-Aplicación web para administrar las operaciones de una empresa de transporte y logística. Centraliza la información de clientes, pedidos, vehículos, conductores, envíos y entregas. Incluye autenticación, permisos por rol, seguimiento de estados, historial de movimientos y un panel con indicadores operativos.
 
-El sistema está desarrollado con una arquitectura cliente-servidor: el navegador consume una API REST y el backend administra las reglas de negocio y la persistencia en PostgreSQL.
+Funcionalidades
+- Sitio público: página de inicio, carrusel de tres imágenes, presentación de la empresa, servicios, inicio de sesión y página 404.
+- Autenticación: ingreso, cierre de sesión, JWT y autorización por rol.
+- Panel principal: indicadores de clientes, pedidos, vehículos disponibles y envíos.
+- Clientes: alta, consulta, búsqueda, edición y baja según reglas de negocio.
+- Tipos de vehículo: catálogo y operaciones autorizadas.
+- Vehículos: datos de la flota, capacidad, disponibilidad y estados operativos.
+- Conductores: datos personales, licencias, estado y asignación.
+- Pedidos: origen, destino, carga, peso, cantidad y fecha estimada.
+- Envíos y seguimiento: asignación de pedido, vehículo y conductor; inicio, cancelación, entrega e historial.
+- Entregas: datos del receptor, resultado y observaciones.
+- Usuarios: gestión de cuentas, roles y desactivación.
+- Diseño responsive: navegación adaptable, tablas desplazables y modales de creación, edición y detalles adaptados a PC, tablet y celular.
+Estados de los envíos
+PENDIENTE → EN_TRANSITO → ENTREGADO
 
-## Tecnologías
+Un envío PENDIENTE también puede pasar a CANCELADO. Los estados finales no vuelven a estados anteriores.
+Roles y permisos
+Rol	Funciones principales
+ADMINISTRADOR	Administración general, usuarios, catálogos, recursos y operaciones.
+OPERADOR	Gestión de clientes, pedidos, envíos y seguimiento; consulta de recursos e indicadores.
+CONDUCTOR	Consulta de sus envíos asignados, inicio de viajes y registro de entregas permitidas.
 
-| Capa | Tecnologías |
-| --- | --- |
-| Frontend | HTML5, CSS3, Bootstrap 5.3.3 y JavaScript |
-| Backend | Node.js y Express.js |
-| Base de datos | PostgreSQL |
-| Conexión a la base de datos | `pg` (pool de conexiones) |
-| Autenticación | JWT y contraseñas protegidas mediante `bcryptjs` |
-| Herramientas de desarrollo | Visual Studio Code, pgAdmin 4 y Live Server |
-| Organización del trabajo | Trello y GitHub |
 
-## Funcionalidades
-
-- **Autenticación:** inicio de sesión, cierre de sesión y verificación de permisos mediante JWT.
-- **Panel principal:** resumen de clientes activos, pedidos, vehículos disponibles y envíos por estado.
-- **Clientes:** alta, consulta, búsqueda, edición y baja según las reglas de negocio.
-- **Tipos de vehículo:** administración del catálogo de tipos.
-- **Vehículos:** registro, consulta, edición, control de capacidad y estado operativo.
-- **Conductores:** administración de datos, estado activo/inactivo y asignación a envíos.
-- **Pedidos:** registro de origen, destino, tipo de carga, cantidad, peso y fecha estimada.
-- **Envíos:** creación a partir de pedidos, asignación de vehículos y conductores, inicio y cancelación según el estado.
-- **Seguimiento:** registro y consulta del historial de estados de cada envío.
-- **Entregas:** confirmación de recepción, identificación de quien recibe y observaciones.
-- **Usuarios:** gestión de cuentas, roles y estado de activación.
-- **Interfaz responsive:** adaptación a pantallas de computadora, tablet y celular.
-
-### Estados de los envíos
-
-`PENDIENTE` → `EN_TRANSITO` → `ENTREGADO`
-
-Un envío `PENDIENTE` también puede pasar a `CANCELADO`. Los envíos entregados o cancelados no pueden volver a un estado anterior.
-
-## Roles y permisos
-
-| Rol | Funciones principales |
-| --- | --- |
-| **ADMINISTRADOR** | Administración general, usuarios, vehículos, conductores, catálogos y operaciones. |
-| **OPERADOR** | Gestión de clientes, pedidos, envíos y seguimiento; consulta de recursos e indicadores. |
-| **CONDUCTOR** | Consulta de sus envíos asignados, inicio de viajes y registro de entregas permitidas. |
-
-Las autorizaciones se comprueban en el backend; ocultar una opción en la interfaz no reemplaza la validación de permisos.
-
-## Estructura del proyecto
-
-```text
-proyecto/
+Los permisos se verifican en el backend. Ocultar botones en la interfaz no reemplaza esa autorización.
+Estructura actual del proyecto
+SistemaTransporteLogistica/
 ├── backend/
-│   ├── controllers/       # Procesamiento de solicitudes HTTP
-│   ├── middleware/        # Autenticación, permisos y errores
-│   ├── routes/            # Endpoints de la API
-│   ├── services/          # Reglas de negocio y consultas SQL
-│   ├── sql/               # Scripts de base de datos
-│   ├── validators/        # Validaciones de datos
-│   ├── .env.example       # Plantilla de configuración
+│   ├── controllers/           # Controladores de solicitudes HTTP
+│   ├── middleware/            # Autenticación y manejo de errores
+│   ├── routes/                # Endpoints de la API REST
+│   ├── scripts/               # Comprobación de sintaxis y creación de admin
+│   ├── services/              # Reglas de negocio y consultas SQL
+│   ├── sql/                   # Material de apoyo de la base de datos
+│   ├── validators/            # Validación de entradas
+│   ├── .env.example           # Plantilla de variables de entorno
 │   ├── .gitignore
-│   ├── db.js              # Pool de PostgreSQL
-│   ├── index.js           # Servidor Express
-│   └── package.json
+│   ├── db.js                  # Conexión y pool de PostgreSQL
+│   ├── index.js               # Configuración y arranque de Express
+│   ├── package.json          # Dependencias y comandos npm
+│   └── package-lock.json      # Versiones resueltas de dependencias
 ├── frontend/
 │   ├── css/
-│   │   └── estilos.css
+│   │   ├── estilos.css        # Estilos base del sistema
+│   │   ├── inicio.css         # Sitio público, marca y paneles responsive
+│   │   └── 404.css            # Página de error
+│   ├── img/
+│   │   ├── Logo.png           # Logo oficial de Tramo
+│   │   ├── favicon.png        # Ícono de la página
+│   │   └── carrusel/
+│   │       ├── slide-1.png
+│   │       ├── slide-2.png
+│   │       └── slide-3.png
 │   ├── js/
-│   │   ├── api.js
-│   │   ├── app.js
-│   │   └── configuracion.js
-│   └── index.html
+│   │   ├── configuracion.js   # API_BASE, roles, estados y módulos
+│   │   ├── api.js             # Peticiones Fetch y token JWT
+│   │   ├── app.js             # Sesión y lógica de los paneles
+│   │   └── inicio.js          # Navegación de la página pública
+│   ├── index.html             # Sitio público, login y paneles
+│   └── 404.html               # Página para enlaces no disponibles
 └── README.md
-```
+backend/.env es un archivo local y privado: puede existir en tu computadora, pero no debe subirse a GitHub. La carpeta node_modules/ se genera con npm install y no forma parte del código fuente.
 
-## Requisitos previos
-
+Requisitos previos
 - Node.js y npm instalados.
 - PostgreSQL instalado y en ejecución.
-- Una herramienta para ejecutar scripts SQL, como pgAdmin 4.
-- Un navegador moderno.
-- Visual Studio Code con Live Server (recomendado para desarrollo local).
-
-## Instalación y ejecución local
-
-### 1. Obtener el proyecto
-
-Clonar el repositorio de GitHub o descargarlo como archivo ZIP y descomprimirlo.
-
-### 2. Configurar PostgreSQL
-
-Crear una base de datos con el nombre:
-
-```sql
+- pgAdmin 4 (o un cliente SQL equivalente).
+- Navegador actualizado.
+- Visual Studio Code con la extensión Live Server (recomendado).
+Instalación y ejecución local
+1. Obtener el proyecto
+Clonar el repositorio:
+git clone https://github.com/Miskevish/SistemaTransporteLogistica.git
+cd SistemaTransporteLogistica
+O descargarlo como ZIP desde GitHub y descomprimirlo.
+2. Configurar PostgreSQL
+Crear la base de datos:
 CREATE DATABASE transporte_logistica;
-```
+El modelo relacional contiene nueve tablas: cliente, pedido, envio, tipo_vehiculo, vehiculo, conductor, entrega, estado_envio y usuario.
 
-Ejecutar los scripts incluidos en `backend/sql/`, respetando sus dependencias y el orden indicado dentro de ellos. El modelo contempla nueve tablas:
-
-`cliente`, `pedido`, `envio`, `tipo_vehiculo`, `vehiculo`, `conductor`, `entrega`, `estado_envio` y `usuario`.
-
-### 3. Configurar el backend
-
-Abrir una terminal dentro de `backend/` e instalar las dependencias:
-
-```bash
+Importante: verificar el material de backend/sql/ y contar con el script SQL de creación y datos iniciales correspondiente a la versión de base utilizada antes de intentar instalar el sistema desde cero. En la copia del backend revisada, esa carpeta contiene una nota, pero no un script SQL completo para reconstruir automáticamente las nueve tablas.
+3. Instalar y configurar el backend
+Abrir una terminal en backend/ y ejecutar:
+cd backend
 npm install
-```
-
-Crear un archivo `.env` a partir de `.env.example` y completar los valores de la instalación local. Por ejemplo:
-
-```dotenv
+Crear backend/.env utilizando backend/.env.example como guía. Ejemplo de configuración sin credenciales reales:
 PORT=3000
 DB_HOST=localhost
 DB_PORT=5432
@@ -125,111 +114,78 @@ DB_USER=postgres
 DB_PASSWORD=REEMPLAZAR_CON_CONTRASENA_LOCAL
 JWT_SECRET=REEMPLAZAR_CON_UN_SECRETO_ALEATORIO_DE_AL_MENOS_32_CARACTERES
 CORS_ORIGIN=http://localhost:5500,http://127.0.0.1:5500
-```
+No subir .env, contraseñas, tokens ni claves JWT al repositorio.
 
-**Importante:** estos valores son ejemplos. No publicar `.env`, contraseñas reales ni claves JWT en el repositorio.
+Iniciar el backend:
+npm start
+También puede ejecutarse node index.js. La API utiliza http://localhost:3000/api con la configuración anterior.
 
-Iniciar el servidor desde `backend/`:
-
-```bash
-node index.js
-```
-
-Si la conexión funciona, la API estará disponible en `http://localhost:3000`.
-
-Comprobar su estado en:
-
-`http://localhost:3000/api/salud`
-
-### 4. Ejecutar el frontend
-
-Abrir `frontend/index.html` mediante la extensión **Live Server** de Visual Studio Code. Con la configuración utilizada durante el desarrollo, la dirección es:
-
-`http://127.0.0.1:5500/frontend/index.html`
-
-La aplicación se comunica con la API configurada en `frontend/js/configuracion.js`:
-
-```javascript
+Comprobar el servicio en:
+http://localhost:3000/api/salud
+4. Ejecutar el frontend
+Abrir frontend/index.html con Live Server desde VS Code. En el entorno usado durante el desarrollo:
+http://127.0.0.1:5500/frontend/index.html
+El frontend consulta la dirección establecida en frontend/js/configuracion.js:
 const API_BASE = "http://localhost:3000/api";
-```
+Si cambia el puerto o dominio, actualizar API_BASE y los orígenes permitidos en CORS_ORIGIN.
+5. Acceder al sistema
+Desde la página pública, elegir Ingresar y utilizar una cuenta activa. Las contraseñas se verifican frente a hashes almacenados; no deben guardarse en texto plano.
+API REST
+Las rutas usan el prefijo /api.
+Módulo	Ruta principal	Operaciones
+Autenticación	/api/auth	Login y perfil
+Clientes	/api/clientes	Consulta, creación, edición y baja
+Tipos de vehículo	/api/tipos-vehiculo	CRUD según permisos
+Vehículos	/api/vehiculos	Consulta, creación, edición y retiro según reglas
+Conductores	/api/conductores	Consulta, creación, edición y baja
+Pedidos	/api/pedidos	CRUD según asociaciones
+Envíos	/api/envios	Consulta, creación, estado, historial y entrega
+Usuarios	/api/usuarios	Gestión y desactivación
+Reportes	/api/reportes/resumen	Indicadores operativos
+Salud	/api/salud	Comprobación del servidor
 
-Si se cambia el puerto u origen del frontend, ajustar también `CORS_ORIGIN` en el backend.
 
-### 5. Acceder al sistema
-
-Iniciar sesión con una cuenta habilitada y registrada en la base de datos. Las contraseñas deben almacenarse como hashes; no deben cargarse directamente en texto plano en la columna de contraseña cifrada.
-
-## API REST
-
-Las rutas tienen como prefijo `/api`.
-
-| Módulo | Ruta principal | Operaciones |
-| --- | --- | --- |
-| Autenticación | `/api/auth` | Iniciar sesión y consultar perfil |
-| Clientes | `/api/clientes` | Consultar, crear, editar y dar de baja |
-| Tipos de vehículo | `/api/tipos-vehiculo` | CRUD |
-| Vehículos | `/api/vehiculos` | Consultar, crear, editar y retirar según reglas |
-| Conductores | `/api/conductores` | Consultar, crear, editar y dar de baja |
-| Pedidos | `/api/pedidos` | CRUD según asociaciones existentes |
-| Envíos | `/api/envios` | Consultar, crear, actualizar estado y registrar entrega |
-| Usuarios | `/api/usuarios` | Administración y desactivación de cuentas |
-| Reportes | `/api/reportes/resumen` | Indicadores generales |
-
-### Rutas destacadas de envíos
-
-```http
+Rutas destacadas de envíos
 GET    /api/envios
 GET    /api/envios/:id
 POST   /api/envios
 PATCH  /api/envios/:id/estado
 GET    /api/envios/:id/historial
 POST   /api/envios/:id/entrega
-```
-
-Las rutas protegidas requieren el encabezado:
-
-```http
+Las rutas protegidas utilizan:
 Authorization: Bearer TOKEN_JWT
-```
-
-## Reglas de negocio principales
-
+Reglas de negocio principales
 1. No asignar vehículos que no estén disponibles.
 2. No asignar conductores inactivos.
-3. Evitar que un vehículo o conductor tenga envíos activos incompatibles.
-4. Impedir que un envío entregado regrese a `EN_TRANSITO`.
-5. Impedir la entrega de un envío cancelado.
-6. Comprobar que la capacidad del vehículo alcance para el peso del pedido.
-7. Validar campos obligatorios, identificadores, fechas y datos antes de guardar.
-8. Conservar el historial de estados para permitir la trazabilidad de los envíos.
-
-## Seguridad y validaciones
-
-- Contraseñas almacenadas como hashes con `bcryptjs`.
-- Tokens JWT para identificar sesiones.
-- Restricciones de acceso por rol desde middleware del backend.
-- Validación de entradas y respuestas HTTP con mensajes de error.
-- Consultas parametrizadas mediante `pg` para reducir riesgos de inyección SQL.
-- Configuración sensible mediante variables de entorno.
-
-## Flujo de uso
-
+3. Evitar asignaciones simultáneas incompatibles de vehículos y conductores.
+4. Respetar las transiciones de estado permitidas.
+5. No registrar entregas de envíos cancelados ni pendientes.
+6. Comprobar que la capacidad del vehículo alcance para el peso de la carga.
+7. Validar campos, referencias, formatos y fechas antes de guardar.
+8. Mantener el historial de estados para asegurar trazabilidad.
+Seguridad y validaciones
+- Contraseñas verificadas mediante bcryptjs.
+- JWT para autenticar solicitudes.
+- Middleware de autenticación y control de roles.
+- Validaciones del frontend y del backend.
+- Consultas SQL parametrizadas mediante pg.
+- Configuración privada en variables de entorno.
+Flujo de uso
 1. Un usuario autorizado registra un cliente.
-2. Registra un pedido con origen, destino y detalles de la carga.
-3. Crea un envío y asigna un vehículo y un conductor válidos.
-4. El envío se registra inicialmente como `PENDIENTE`.
-5. Al iniciar el viaje, cambia a `EN_TRANSITO` y registra el movimiento.
-6. Cuando llega a destino, registra la entrega y el envío pasa a `ENTREGADO`.
-7. El historial conserva las transiciones realizadas.
+2. Registra un pedido con origen, destino y datos de la carga.
+3. Crea un envío, eligiendo pedido, vehículo disponible, conductor activo y fecha prevista.
+4. El envío comienza en PENDIENTE.
+5. Al iniciar el viaje, cambia a EN_TRANSITO.
+6. Al registrar la entrega, pasa a ENTREGADO.
+7. Se puede consultar el historial de estados y movimientos.
+Interfaz e identidad visual
+La marca Tramo utiliza grafito (#20252B), arena tostada (#A88351) y blanco hueso (#FAF7F5), con tipografía Montserrat. El diseño diferencia las acciones de riesgo (rojo), inicio de envíos (azul) y entregas (verde).
 
-## Gestión del proyecto
-
-Tablero de Trello: [Tramo: empresa de Transporte y Logística](https://trello.com/b/zyWuCG45)
-
-## Consideraciones
-
-El sistema fue desarrollado como trabajo académico y se ejecuta en un entorno local de desarrollo. Antes de desplegarlo públicamente se recomienda incorporar una configuración de producción específica, HTTPS, gestión segura de secretos y pruebas automatizadas.
-
----
-
-**Taller Integrador II — Sistema web de gestión para una empresa de transporte y logística.**
+La web pública incorpora tres diapositivas de carrusel, presentación institucional, servicios y pie con enlaces informativos. Los paneles muestran navegación lateral adaptable y modales de creación, edición y consulta optimizados para pantallas pequeñas.
+Gestión del proyecto
+- Repositorio: https://github.com/Miskevish/SistemaTransporteLogistica
+- Tablero de Trello: https://trello.com/b/zyWuCG45
+El equipo trabajó con ramas dev y main y utilizó pull requests para integrar cambios a main.
+Consideraciones
+Tramo es un desarrollo académico ejecutado localmente. Para un despliegue público se recomienda configurar HTTPS, gestionar los secretos de forma segura, preparar migraciones o scripts de instalación de la base de datos y contar con pruebas automatizadas.
+Taller Integrador II — TRAMO, Sistema de Transporte y Logística.
